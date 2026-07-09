@@ -47,6 +47,9 @@ pub enum Token {
     #[token("/")]
     Slash,
 
+    #[token("&")]
+    Ampersand,
+
     #[regex(r"\\[a-zA-Z]+", |lex| lex.slice()[1..].to_string())]
     Command(String),
 

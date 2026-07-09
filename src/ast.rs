@@ -15,6 +15,7 @@ pub enum Expr {
     Juxtapose(Vec<Expr>),
     Escape(String),
     Empty,
+    Matrix { name: String, rows: Vec<Vec<Expr>> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

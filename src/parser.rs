@@ -88,6 +88,7 @@ impl<'a> Parser<'a> {
                 | Some(Token::Pipe)
                 | Some(Token::Minus)
                 | Some(Token::Plus)
+                | Some(Token::Ampersand)
         )
     }
 
@@ -106,7 +107,8 @@ impl<'a> Parser<'a> {
         | Some(Token::Ident(_))
         | Some(Token::Command(_))
         | Some(Token::Escape(_))
-        | Some(Token::Bang) = self.peek()
+        | Some(Token::Bang)
+        | Some(Token::Ampersand) = self.peek()
         {
             exprs.push(self.parse_scripted()?);
         }
@@ -189,7 +191,11 @@ impl<'a> Parser<'a> {
             Some(Token::Command(name)) => {
                 let name = name.clone();
                 self.advance();
-                self.parse_command(&name)
+                if name == "begin" {
+                    self.parse_begin()
+                } else {
+                    self.parse_command(&name)
+                }
             }
             Some(Token::Escape(s)) => {
                 let s = s.clone();
@@ -213,6 +219,10 @@ impl<'a> Parser<'a> {
             Some(Token::Bang) => {
                 self.advance();
                 Ok(Expr::Ident("!".into()))
+            }
+            Some(Token::Ampersand) => {
+                self.advance();
+                Ok(Expr::Ident("&".into()))
             }
             Some(Token::Plus) => {
                 self.advance();
@@ -250,5 +260,122 @@ impl<'a> Parser<'a> {
             name: name.to_string(),
             args,
         })
+    }
+
+    fn parse_begin(&mut self) -> Result<Expr, ParseError> {
+        self.expect(Token::LBrace);
+        let env_name = match self.peek() {
+            Some(Token::Ident(name)) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+            _ => {
+                return Err(ParseError(
+                    "expected environment name in \\begin{...}".into(),
+                ))
+            }
+        };
+        self.expect(Token::RBrace);
+
+        let body_start = self.pos;
+        let mut depth = 0u32;
+        let end_pos = loop {
+            match self.tokens.get(self.pos) {
+                None => return Err(ParseError(format!("unclosed \\begin{{{}}}", env_name))),
+                Some(Token::Command(name)) if name == "begin" => {
+                    depth += 1;
+                    self.pos += 1;
+                }
+                Some(Token::Command(name)) if name == "end" => {
+                    if depth == 0 {
+                        break self.pos;
+                    }
+                    depth -= 1;
+                    self.pos += 1;
+                }
+                Some(_) => {
+                    self.pos += 1;
+                }
+            }
+        };
+
+        let body = &self.tokens[body_start..end_pos];
+        let rows = self.parse_matrix_body(body)?;
+
+        self.advance();
+        self.expect(Token::LBrace);
+        let end_name = match self.peek() {
+            Some(Token::Ident(name)) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+            _ => return Err(ParseError("expected environment name in \\end{...}".into())),
+        };
+        if end_name != env_name {
+            return Err(ParseError(format!(
+                "mismatched \\begin{{{}}} and \\end{{{}}}",
+                env_name, end_name
+            )));
+        }
+        self.expect(Token::RBrace);
+
+        Ok(Expr::Matrix {
+            name: env_name,
+            rows,
+        })
+    }
+
+    fn parse_matrix_body(&self, tokens: &'a [Token]) -> Result<Vec<Vec<Expr>>, ParseError> {
+        let mut rows: Vec<Vec<Expr>> = Vec::new();
+        let mut current_row: Vec<Expr> = Vec::new();
+        let mut cell_start: usize = 0;
+        let mut depth: u32 = 0;
+        let mut env_depth: u32 = 0;
+
+        for (i, token) in tokens.iter().enumerate() {
+            match token {
+                Token::LBrace | Token::LBracket | Token::LParen => depth += 1,
+                Token::RBrace | Token::RBracket | Token::RParen => depth = depth.saturating_sub(1),
+                Token::Command(name) if name == "begin" => env_depth += 1,
+                Token::Command(name) if name == "end" => env_depth = env_depth.saturating_sub(1),
+                Token::Ampersand if depth == 0 && env_depth == 0 => {
+                    let cell = self.parse_tokens(&tokens[cell_start..i])?;
+                    current_row.push(cell);
+                    cell_start = i + 1;
+                }
+                Token::Escape(s) if s == "\\" && depth == 0 && env_depth == 0 => {
+                    let cell = self.parse_tokens(&tokens[cell_start..i])?;
+                    current_row.push(cell);
+                    rows.push(current_row);
+                    current_row = Vec::new();
+                    cell_start = i + 1;
+                }
+                _ => {}
+            }
+        }
+
+        if cell_start < tokens.len() {
+            let cell = self.parse_tokens(&tokens[cell_start..])?;
+            current_row.push(cell);
+        }
+        if !current_row.is_empty() || rows.is_empty() {
+            rows.push(current_row);
+        }
+
+        Ok(rows)
+    }
+
+    fn parse_tokens(&self, tokens: &'a [Token]) -> Result<Expr, ParseError> {
+        if tokens.is_empty() {
+            return Ok(Expr::Empty);
+        }
+        let mut sub = Parser {
+            tokens,
+            pos: 0,
+            registry: self.registry,
+        };
+        sub.parse_expr()
     }
 }
