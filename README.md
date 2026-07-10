@@ -16,6 +16,15 @@ Requires [Nix](https://nix.dev/install-nix) with flakes enabled.
 ![s4](./screenshots/4.png)
 ![s5](./screenshots/5.png)
 
+# Installation
+```
+$ cargo install txm
+```
+Or
+```
+$ cargo install --git https://github.com/thatmagicalcat/txm
+```
+
 ## License
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
