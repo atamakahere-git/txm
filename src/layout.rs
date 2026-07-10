@@ -363,32 +363,83 @@ impl RenderNode {
         };
 
         let num_rows = rendered_rows.len();
-        let num_cols = rendered_rows[0].len();
-
-        let mut max_item_width = 0;
-        let mut max_item_height = 0;
-
-        for row in rendered_rows {
-            for item in row {
-                max_item_height = max_item_height.max(item.height);
-                max_item_width = max_item_width.max(item.width);
-            }
+        if num_rows == 0 || rendered_rows[0].is_empty() {
+            return Self::new(0, 0, 0);
         }
 
-        let spacing = 1;
-        let matrix_layout_height = num_rows * max_item_height;
-        let matrix_layout_width = num_cols * max_item_width + (num_cols - 1) * spacing;
-        let baseline = num_rows / 2;
+        let num_cols = rendered_rows[0].len();
 
-        let mut data = vec![' '; matrix_layout_height * matrix_layout_width];
+        // depth = height - baseline
+        let mut row_max_depths = vec![0; num_rows];
+        let mut row_max_baselines = vec![0; num_rows];
+        let mut max_item_width = 0;
+
+        // analyze dimensions per row to preserve baselines
         for (i, row) in rendered_rows.iter().enumerate() {
+            let mut max_b = 0;
+            let mut max_d = 0;
+
+            for item in row {
+                max_item_width = max_item_width.max(item.width);
+                max_b = max_b.max(item.baseline);
+                max_d = max_d.max(item.height.saturating_sub(item.baseline));
+            }
+
+            row_max_baselines[i] = max_b;
+            row_max_depths[i] = max_d;
+        }
+
+        // define a uniform cell size for the matrix grid
+        let cell_width = max_item_width;
+        let mut cell_height = 0;
+
+        for i in 0..num_rows {
+            let row_content_height = row_max_baselines[i] + row_max_depths[i];
+            cell_height = cell_height.max(row_content_height);
+        }
+
+        let row_padding = 1;
+        cell_height = cell_height.max(1);
+
+        let active_cell_height = if num_rows > 1 {
+            cell_height + row_padding
+        } else {
+            cell_height
+        };
+
+        let hspacing = 4;
+        let vspacing = 1;
+
+        let mut matrix_layout_height = num_rows * cell_height + (num_rows - 1) * vspacing;
+        let matrix_layout_width = num_cols * cell_width + (num_cols - 1) * hspacing;
+
+        // make the total height odd so the baseline sits right in the center
+        if matrix_layout_height.is_multiple_of(2) {
+            matrix_layout_height += 1;
+        }
+
+        let baseline = matrix_layout_height / 2;
+        let mut data = vec![' '; matrix_layout_height * matrix_layout_width];
+
+        for (i, row) in rendered_rows.iter().enumerate() {
+            let row_content_height = row_max_baselines[i] + row_max_depths[i];
+            // let row_padding_top = (cell_height - row_content_height) / 2;
+            let row_padding_top = (active_cell_height - row_content_height) / 2;
+            let row_cell_baseline = row_padding_top + row_max_baselines[i];
+
             for (j, item) in row.iter().enumerate() {
-                item.blit_into(
-                    &mut data,
-                    matrix_layout_width,
-                    j * (max_item_width + spacing),
-                    i * max_item_height,
-                );
+                let cell_x = j * (cell_width + hspacing);
+                let cell_y = i * active_cell_height;
+
+                // horizontally center the item in the cell
+                let item_x_in_cell = (cell_width - item.width) / 2;
+                // vertically align the item's baseline with row's
+                let item_y_in_cell = row_cell_baseline - item.baseline;
+
+                let center_x = cell_x + item_x_in_cell;
+                let center_y = cell_y + item_y_in_cell;
+
+                item.blit_into(&mut data, matrix_layout_width, center_x, center_y);
             }
         }
 
