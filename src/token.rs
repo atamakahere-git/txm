@@ -1,6 +1,10 @@
+use std::ops::Range;
+
 use logos::Logos;
 
 use crate::error::ParseError;
+
+pub type SpannedToken<'a> = (Token<'a>, Range<usize>);
 
 #[derive(Logos, Debug, Clone, PartialEq)]
 pub enum Token<'a> {
@@ -69,9 +73,12 @@ pub enum Token<'a> {
     Whitespace,
 }
 
-pub fn tokenize(input: &str) -> Result<Vec<Token<'_>>, ParseError> {
+pub fn tokenize(input: &str) -> Result<Vec<SpannedToken<'_>>, ParseError> {
     Token::lexer(input)
         .spanned()
-        .map(|(i, span)| i.map_err(|_| ParseError::from_range(span)))
+        .map(|(i, span)| {
+            i.map(|i| (i, span.clone()))
+                .map_err(|_| ParseError::from_range(span))
+        })
         .collect()
 }

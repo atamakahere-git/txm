@@ -1,17 +1,26 @@
+use std::ops::Range;
+
 use crate::ParseError;
 use crate::ast::*;
 use crate::glyph::SymbolRegistry;
+use crate::token::SpannedToken;
 use crate::token::Token;
 
 pub struct Parser<'a> {
-    tokens: &'a [Token<'a>],
+    tokens: &'a [SpannedToken<'a>],
+    input: &'a str,
     pos: usize,
     registry: &'a SymbolRegistry,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a [Token], registry: &'a SymbolRegistry) -> Self {
+    pub fn new(
+        input: &'a str,
+        tokens: &'a [SpannedToken<'a>],
+        registry: &'a SymbolRegistry,
+    ) -> Self {
         Self {
+            input,
             tokens,
             pos: 0,
             registry,
@@ -19,27 +28,79 @@ impl<'a> Parser<'a> {
     }
 
     fn peek(&self) -> Option<&Token<'_>> {
-        self.tokens.get(self.pos)
+        self.tokens.get(self.pos).map(|(i, _)| i)
+    }
+
+    fn current_span(&self) -> Option<&Range<usize>> {
+        self.tokens.get(self.pos).map(|(_, j)| j)
     }
 
     fn advance(&mut self) -> Token<'_> {
         let t = self.tokens[self.pos].clone();
         self.pos += 1;
-        t
+        t.0
     }
 
     fn expect(&mut self, tok: Token) -> Result<(), ParseError> {
         match self.peek() {
-            None => Err(ParseError(format!(
-                "expected {:?} but reached end of input",
-                tok
-            ))),
+            None => Err(ParseError::at_eof(&format!("expected {tok:?}"), self.input)),
             Some(actual) if *actual == tok => {
                 self.advance();
                 Ok(())
             }
-            Some(actual) => Err(ParseError(format!("expected {:?}, got {:?}", tok, actual))),
+            Some(actual) => Err(ParseError::at(
+                &format!("expected {tok:?}, got {actual:?}"),
+                self.current_span().unwrap().clone(),
+                self.input,
+            )),
         }
+    }
+
+    /// For input = "xyz", the tokenizer returns:
+    /// `[(Ident("x"), 0..1), (Ident("y"), 1..2), (Ident("z"), 2..3)]`
+    ///
+    /// This function takes that stream of tokens and returns Ok("xyz")
+    /// if those tokens are continuous. If the input string had whitespaces,
+    /// for example, "x y z", the tokenizer returns:
+    /// `[(Ident("x"), 0..1), (Ident("y"), 2..3), (Ident("z"), 4..5)]`
+    /// it returns an error.
+    fn parse_continuous_string(&mut self, deliminted_by: Token) -> Result<String, ParseError> {
+        let mut name = String::new();
+        let mut last_end: Option<usize> = None;
+
+        loop {
+            if let Some(Token::Ident(segment)) = self.peek() {
+                let span = self
+                    .current_span()
+                    .ok_or_else(|| ParseError("unexpected end of input".to_owned()))?;
+
+                if let Some(prev_end) = last_end
+                    && prev_end != span.start
+                {
+                    return Err(ParseError::at(
+                        "unexpected whitespace",
+                        span.clone(),
+                        self.input,
+                    ));
+                }
+
+                name.push_str(segment);
+                last_end = Some(span.end);
+                self.advance();
+            } else if self.peek() == Some(&deliminted_by) {
+                break;
+            } else {
+                return Err(ParseError::at(
+                    "expected a string",
+                    self.current_span()
+                        .ok_or_else(|| ParseError("unexpected eof".to_owned()))?
+                        .clone(),
+                    self.input,
+                ));
+            }
+        }
+
+        Ok(name)
     }
 
     pub fn parse_expr(&mut self) -> Result<Expr, ParseError> {
@@ -365,20 +426,7 @@ impl<'a> Parser<'a> {
     fn parse_begin(&mut self) -> Result<Expr, ParseError> {
         self.expect(Token::LBrace)?;
 
-        let mut env_name = String::new();
-        loop {
-            if let Some(Token::Ident(i)) = self.peek() {
-                env_name.push_str(i);
-                self.advance();
-            } else if let Some(Token::RBrace) = self.peek() {
-                break;
-            } else {
-                return Err(ParseError(
-                    "expected environment name in \\begin{...}".into(),
-                ));
-            }
-        }
-
+        let env_name = self.parse_continuous_string(Token::RBrace)?;
         self.expect(Token::RBrace)?;
 
         if !matches!(env_name.as_str(), "matrix" | "bmatrix" | "pmatrix") {
@@ -392,11 +440,11 @@ impl<'a> Parser<'a> {
         let end_pos = loop {
             match self.tokens.get(self.pos) {
                 None => return Err(ParseError(format!("unclosed \\begin{{{}}}", env_name))),
-                Some(Token::Command(name)) if *name == "begin" => {
+                Some((Token::Command(name), _)) if *name == "begin" => {
                     depth += 1;
                     self.pos += 1;
                 }
-                Some(Token::Command(name)) if *name == "end" => {
+                Some((Token::Command(name), _)) if *name == "end" => {
                     if depth == 0 {
                         break self.pos;
                     }
@@ -415,20 +463,7 @@ impl<'a> Parser<'a> {
         self.advance();
         self.expect(Token::LBrace)?;
 
-        let mut end_name = String::new();
-        loop {
-            if let Some(Token::Ident(i)) = self.peek() {
-                end_name.push_str(i);
-                self.advance();
-            } else if let Some(Token::RBrace) = self.peek() {
-                break;
-            } else {
-                return Err(ParseError(
-                    "expected environment name in \\begin{...}".into(),
-                ));
-            }
-        }
-
+        let end_name = self.parse_continuous_string(Token::RBrace)?;
         if *end_name != env_name {
             return Err(ParseError(format!(
                 "mismatched \\begin{{{env_name}}} and \\end{{{end_name}}}",
@@ -443,14 +478,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_matrix_body(&self, tokens: &'a [Token]) -> Result<Vec<Vec<Expr>>, ParseError> {
+    fn parse_matrix_body(&self, tokens: &'a [SpannedToken]) -> Result<Vec<Vec<Expr>>, ParseError> {
         let mut rows: Vec<Vec<Expr>> = Vec::new();
         let mut current_row: Vec<Expr> = Vec::new();
         let mut cell_start: usize = 0;
         let mut depth: u32 = 0;
         let mut env_depth: u32 = 0;
 
-        for (i, token) in tokens.iter().enumerate() {
+        for (i, (token, _)) in tokens.iter().enumerate() {
             match token {
                 Token::LBrace | Token::LBracket | Token::LParen => depth += 1,
                 Token::RBrace | Token::RBracket | Token::RParen => depth = depth.saturating_sub(1),
@@ -483,15 +518,18 @@ impl<'a> Parser<'a> {
         Ok(rows)
     }
 
-    fn parse_tokens(&self, tokens: &'a [Token]) -> Result<Expr, ParseError> {
+    fn parse_tokens(&self, tokens: &'a [SpannedToken]) -> Result<Expr, ParseError> {
         if tokens.is_empty() {
             return Ok(Expr::Empty);
         }
+
         let mut sub = Parser {
+            input: self.input,
             tokens,
             pos: 0,
             registry: self.registry,
         };
+
         sub.parse_expr()
     }
 }
