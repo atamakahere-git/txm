@@ -52,6 +52,9 @@ fn main() {
                 std::process::exit(1);
             }
         },
+        Err(msg) if msg == "missing expression" => {
+            print!("{}", help(&program, &flags));
+        }
         Err(msg) => {
             eprintln!("error: {msg}");
             eprintln!("{}", help(&program, &flags));

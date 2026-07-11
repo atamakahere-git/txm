@@ -7,10 +7,7 @@ fn prints_usage_without_arguments() {
         .expect("failed to run txm");
 
     assert!(output.status.success());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "Usage: txm [LaTeX input]\n"
-    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
 }
 
 #[test]
