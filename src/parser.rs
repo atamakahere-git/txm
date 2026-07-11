@@ -364,18 +364,20 @@ impl<'a> Parser<'a> {
 
     fn parse_begin(&mut self) -> Result<Expr, ParseError> {
         self.expect(Token::LBrace)?;
-        let env_name = match self.peek() {
-            Some(Token::Ident(name)) => {
-                let name = name.to_string();
+
+        let mut env_name = String::new();
+        loop {
+            if let Some(Token::Ident(i)) = self.peek() {
+                env_name.push_str(i);
                 self.advance();
-                name
-            }
-            _ => {
+            } else if let Some(Token::RBrace) = self.peek() {
+                break;
+            } else {
                 return Err(ParseError(
                     "expected environment name in \\begin{...}".into(),
                 ));
             }
-        };
+        }
 
         self.expect(Token::RBrace)?;
 
@@ -413,19 +415,23 @@ impl<'a> Parser<'a> {
         self.advance();
         self.expect(Token::LBrace)?;
 
-        let end_name = match self.peek() {
-            Some(Token::Ident(name)) => {
-                let name = name.to_string();
+        let mut end_name = String::new();
+        loop {
+            if let Some(Token::Ident(i)) = self.peek() {
+                end_name.push_str(i);
                 self.advance();
-                name
+            } else if let Some(Token::RBrace) = self.peek() {
+                break;
+            } else {
+                return Err(ParseError(
+                    "expected environment name in \\begin{...}".into(),
+                ));
             }
-            _ => return Err(ParseError("expected environment name in \\end{...}".into())),
-        };
+        }
 
         if *end_name != env_name {
             return Err(ParseError(format!(
-                "mismatched \\begin{{{}}} and \\end{{{}}}",
-                env_name, end_name
+                "mismatched \\begin{{{env_name}}} and \\end{{{end_name}}}",
             )));
         }
 
