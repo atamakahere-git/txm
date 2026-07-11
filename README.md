@@ -4,6 +4,7 @@
 </div>
 
 # Screenshots:
+![s0](./screenshots/0.png)
 ![s1](./screenshots/1.png)
 ![s2](./screenshots/2.png)
 ![s3](./screenshots/3.png)
@@ -38,6 +39,9 @@ Or
 ```
 $ cargo install --git https://github.com/thatmagicalcat/txm
 ```
+
+# Projects using TXM:
+- [**txm.nvim**](https://github.com/rv178/txm.nvim/): LaTeX preview inside NeoVim using
 
 ## License
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
