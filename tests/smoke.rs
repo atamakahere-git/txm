@@ -117,3 +117,15 @@ fn accent_stacks_mark_above_argument() {
 fn inline_punctuation_renders_literally() {
     assert_eq!(txm::render(r"(3,0)").unwrap(), "(3,0)\n");
 }
+
+#[test]
+fn stretchy_brackets_use_side_correct_extensions() {
+    let rendered = txm::render(r"\begin{bmatrix}a\\b\\c\end{bmatrix}").unwrap();
+    let lines: Vec<&str> = rendered.lines().collect();
+    assert!(lines.len() >= 3, "expected tall bracket: {rendered:?}");
+    assert!(
+        lines[1].starts_with('⎢') && lines[1].ends_with('⎥'),
+        "middle row should use left/right bracket pieces: {:?}",
+        lines[1]
+    );
+}

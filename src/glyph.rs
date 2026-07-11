@@ -279,7 +279,7 @@ impl Glyph for IntegralGlyph {
                 width: 2, // symbol + space
                 height: 3,
                 baseline: 1,
-                data: vec!['⎛', ' ', '⎟', ' ', '⎠', ' '],
+                data: vec!['⎛', ' ', '⎜', ' ', '⎠', ' '],
             }
         } else {
             // no stretching required
@@ -288,7 +288,7 @@ impl Glyph for IntegralGlyph {
                 let mut data = vec![' '; w * 3];
 
                 data[0] = '⎛';
-                data[w] = '⎟';
+                data[w] = '⎜';
                 data[2 * w] = '⎠';
 
                 // center one-liner expressions
@@ -303,7 +303,7 @@ impl Glyph for IntegralGlyph {
                 };
             }
 
-            RenderNode::stretchy_delim_left(&args[0], '⎛', '⎟', '⎠')
+            RenderNode::stretchy_delim_left(&args[0], '⎛', '⎜', '⎠')
         }
     }
 }
