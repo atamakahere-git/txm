@@ -49,6 +49,9 @@ Or
 $ cargo install --git https://github.com/thatmagicalcat/txm
 ```
 
+### Bindings
+- Python bindings live in [`bindings/py/`](./bindings/py/).
+
 # Projects using TXM:
 - [**txm.nvim**](https://github.com/rv178/txm.nvim/): LaTeX preview inside NeoVim using
 

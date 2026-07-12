@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "txm-py"
+description = "Python bindings for TXM, a terminal math rendering engine."
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+license = "MIT OR Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/thatmagicalcat/txm"
+Issues = "https://github.com/thatmagicalcat/txm/issues"
