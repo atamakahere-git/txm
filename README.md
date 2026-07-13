@@ -17,9 +17,6 @@ nix run github:thatmagicalcat/txm -- "E = mc^2"
 ```
 Requires [Nix](https://nix.dev/install-nix) with flakes enabled.
 
-> [!NOTE]
-> If you'd like this project added to nixpkgs, consider leaving a 👍 on [PR #541015](https://github.com/NixOS/nixpkgs/pull/541015).
-
 # Installation
 ### Arch Linux (AUR)
 Install `txm-git` using an AUR helper like `yay` or `paru`:
