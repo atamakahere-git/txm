@@ -79,7 +79,7 @@ pub struct LimitGlyph;
 impl Glyph for LimitGlyph {
     fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let mut node = LayoutNode::text_str("lim");
-        node.style = ctx.current_style;
+        node.style = ctx.current_style.un_italic();
         node
     }
 
@@ -106,6 +106,7 @@ pub struct TextGlyph(pub &'static str);
 
 impl Glyph for TextGlyph {
     fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        dbg!("yo wtf");
         LayoutNode::text_with_style(self.0.chars().collect(), ctx.current_style.un_italic())
     }
 }

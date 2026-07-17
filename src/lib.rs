@@ -104,7 +104,7 @@ fn build_registry() -> SymbolRegistry {
     for name in &[
         "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan", "sinh", "cosh",
         "coth", "tanh", "log", "ln", "lg", "det", "dim", "hom", "ker", "exp", "deg", "gcd", "lcm",
-        "lim", "sup", "inf", "max", "min", "arg", "Pr", "mod", "adj",
+        "sup", "inf", "max", "min", "arg", "Pr", "mod", "adj",
     ] {
         r.register(*name, TextGlyph(name));
     }

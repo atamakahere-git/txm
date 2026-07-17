@@ -1,3 +1,5 @@
+use std::string::ParseError;
+
 use crate::ast::BinOp;
 use crate::style::Style;
 
@@ -225,33 +227,28 @@ impl LayoutNode {
         }
     }
 
-    pub fn superscript(base: LayoutNode, mut exp: LayoutNode) -> Self {
-        let mut height = exp.height + base.height;
-        let width = exp.width + base.width;
-        let mut baseline = base.baseline + exp.height;
-        let mut inline = false;
-
-        if let NodeKind::Text { content } = &exp.kind
-            && exp.height == 1
+    pub fn superscript(base: LayoutNode, exp: LayoutNode) -> Self {
+        if exp.height == 1
+            && let converted = map_content(&exp.kind, to_superscript_char)
+            && converted.len() == exp.width
         {
-            let converted = content
-                .iter()
-                .map_while(|&i| to_superscript_char(i))
-                .collect::<Vec<_>>();
-
-            // conversion was successful
-            if converted.len() == content.len() {
-                let NodeKind::Text { content } = &mut exp.kind else {
-                    // SAFETY: we already checked the type
-                    unreachable!()
-                };
-
-                *content = converted;
-                height -= 1;
-                baseline -= exp.height;
-                inline = true;
-            }
+            return Self {
+                width: base.width + exp.width,
+                height: base.height,
+                baseline: base.baseline,
+                style: Style::new(),
+                kind: NodeKind::Superscript {
+                    inline: true,
+                    base: Box::new(base),
+                    exp: Box::new(LayoutNode::text_with_style(converted, Style::new())),
+                },
+            };
         }
+
+        let height = exp.height + base.height;
+        let width = exp.width + base.width;
+        let baseline = base.baseline + exp.height;
+        let inline = false;
 
         Self {
             width,
@@ -266,31 +263,27 @@ impl LayoutNode {
         }
     }
 
-    pub fn subscript(base: LayoutNode, mut sub: LayoutNode) -> Self {
-        let mut height = base.height + sub.height;
-        let width = base.width + sub.width;
-        let mut inline = false;
-
-        if let NodeKind::Text { content } = &sub.kind
-            && sub.height == 1
+    pub fn subscript(base: LayoutNode, sub: LayoutNode) -> Self {
+        if sub.height == 1
+            && let converted = map_content(&sub.kind, to_subscript_char)
+            && converted.len() == sub.width
         {
-            let converted = content
-                .iter()
-                .map_while(|&i| to_subscript_char(i))
-                .collect::<Vec<_>>();
-
-            // conversion was successful
-            if converted.len() == content.len() {
-                let NodeKind::Text { content } = &mut sub.kind else {
-                    // SAFETY: we already checked the type
-                    unreachable!()
-                };
-
-                *content = converted;
-                height -= 1;
-                inline = true;
-            }
+            return Self {
+                width: base.width + sub.width,
+                height: base.height,
+                baseline: base.baseline,
+                style: Style::new(),
+                kind: NodeKind::Subscript {
+                    inline: true,
+                    base: Box::new(base),
+                    sub: Box::new(LayoutNode::text_with_style(converted, Style::new())),
+                },
+            };
         }
+
+        let height = base.height + sub.height;
+        let width = base.width + sub.width;
+        let inline = false;
 
         Self {
             width,
@@ -644,4 +637,35 @@ fn to_subscript_char(c: char) -> Option<char> {
 
         _ => return None,
     })
+}
+
+fn map_content<F>(node: &NodeKind, f: F) -> Vec<char>
+where
+    F: Fn(char) -> Option<char>,
+{
+    fn map_content_internal<F: Fn(char) -> Option<char>>(
+        node: &NodeKind,
+        f: &F,
+        vec: &mut Vec<char>,
+    ) {
+        match node {
+            NodeKind::Text { content } => vec.extend(content.iter().map_while(|&c| f(c))),
+
+            NodeKind::HStack { children, spacing } => {
+                let n = children.len();
+                for (i, node) in children.into_iter().enumerate() {
+                    map_content_internal(&node.kind, f, vec);
+                    if i + 1 != n {
+                        vec.extend(std::iter::repeat_n(' ', *spacing));
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    let mut vec = vec![];
+    map_content_internal(node, &f, &mut vec);
+    vec
 }
