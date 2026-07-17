@@ -4,7 +4,17 @@ use crate::layout_tree::{LayoutNode, LineStyle, NodeKind};
 use crate::style::Style;
 
 pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usize, y: usize) {
-    let style = node.style;
+    render_inner(node, buf, x, y, Style::new())
+}
+
+fn render_inner(
+    node: &LayoutNode,
+    buf: &mut impl RenderTarget,
+    x: usize,
+    y: usize,
+    inherited: Style,
+) {
+    let style = inherited.merge(node.style);
 
     match &node.kind {
         NodeKind::Text { content } => {
@@ -17,7 +27,7 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             let mut cx = x;
             for child in children {
                 let cy = y + (node.baseline - child.baseline);
-                render_node(child, buf, cx, cy);
+                render_inner(child, buf, cx, cy, style);
                 cx += child.width + spacing;
             }
         }
@@ -28,8 +38,8 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             let top_x = x + pad + (inner_w.saturating_sub(top.width)) / 2;
             let bot_x = x + pad + (inner_w.saturating_sub(bottom.width)) / 2;
 
-            render_node(top, buf, top_x, y);
-            render_node(bottom, buf, bot_x, y + top.height + 1);
+            render_inner(top, buf, top_x, y, style);
+            render_inner(bottom, buf, bot_x, y + top.height + 1, style);
 
             if *line == LineStyle::Solid {
                 let w = node.width;
@@ -42,7 +52,7 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             let lhs_y = y + (baseline - lhs.baseline);
             let rhs_y = y + (baseline - rhs.baseline);
 
-            render_node(lhs, buf, x, lhs_y);
+            render_inner(lhs, buf, x, lhs_y, style);
 
             let op_char = match op {
                 BinOp::Add => '+',
@@ -52,25 +62,25 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             };
             buf.set(x + lhs.width + 1, y + baseline, op_char, style);
 
-            render_node(rhs, buf, x + lhs.width + 3, rhs_y);
+            render_inner(rhs, buf, x + lhs.width + 3, rhs_y, style);
         }
 
         NodeKind::Superscript { base, exp } => {
-            render_node(exp, buf, x + base.width, y);
-            render_node(base, buf, x, y + exp.height);
+            render_inner(exp, buf, x + base.width, y, style);
+            render_inner(base, buf, x, y + exp.height, style);
         }
 
         NodeKind::Subscript { base, sub } => {
-            render_node(base, buf, x, y);
+            render_inner(base, buf, x, y, style);
             let sub_y = y + base.baseline + 1;
-            render_node(sub, buf, x + base.width, sub_y);
+            render_inner(sub, buf, x + base.width, sub_y, style);
         }
 
         NodeKind::BothScripts { base, sub, sup } => {
-            render_node(sup, buf, x + base.width, y);
-            render_node(base, buf, x, y + sup.height);
+            render_inner(sup, buf, x + base.width, y, style);
+            render_inner(base, buf, x, y + sup.height, style);
             let sub_y = y + sup.height + base.baseline + 1;
-            render_node(sub, buf, x + base.width, sub_y);
+            render_inner(sub, buf, x + base.width, sub_y, style);
         }
 
         NodeKind::StretchyDelim {
@@ -83,7 +93,7 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
                 let resolved_left = resolve_delimiter_single(*left);
                 let resolved_right = resolve_delimiter_single(*right);
                 buf.set(x, y, resolved_left, style);
-                render_node(inner, buf, x + 1, y);
+                render_inner(inner, buf, x + 1, y, style);
                 buf.set(x + node.width - 1, y, resolved_right, style);
             } else {
                 let resolved =
@@ -92,7 +102,7 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
                     buf.set(x, y + row, *l, style);
                     buf.set(x + node.width - 1, y + row, *r, style);
                 }
-                render_node(inner, buf, x + 2, y);
+                render_inner(inner, buf, x + 2, y, style);
             }
         }
 
@@ -108,14 +118,14 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             } else {
                 buf.set(x + node.width / 2, y, *mark, style);
             }
-            render_node(inner, buf, x, y + 1);
+            render_inner(inner, buf, x, y + 1, style);
         }
 
         NodeKind::Limits { base, lower, upper } => {
             let max_h = upper.height.max(lower.height);
-            render_node(upper, buf, x, y + (max_h - upper.height));
-            render_node(base, buf, x, y + max_h);
-            render_node(lower, buf, x, y + max_h + base.height);
+            render_inner(upper, buf, x, y + (max_h - upper.height), style);
+            render_inner(base, buf, x, y + max_h, style);
+            render_inner(lower, buf, x, y + max_h + base.height, style);
         }
 
         NodeKind::Sqrt { inner, index } => {
@@ -127,10 +137,10 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
                 buf.set(x + 1, y + row, '│', style);
             }
             buf.set(x, y + node.height - 1, '╲', style);
-            render_node(inner, buf, x + 3, y + 1);
+            render_inner(inner, buf, x + 3, y + 1, style);
 
             if let Some(idx) = index {
-                render_node(idx, buf, x, y);
+                render_inner(idx, buf, x, y, style);
             }
         }
 
@@ -152,11 +162,11 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
 
         NodeKind::Neg { inner } => {
             buf.set(x, y + inner.baseline, '-', style);
-            render_node(inner, buf, x + 1, y);
+            render_inner(inner, buf, x + 1, y, style);
         }
 
         NodeKind::Prime { base, count } => {
-            render_node(base, buf, x, y);
+            render_inner(base, buf, x, y, style);
             for i in 0..*count {
                 buf.set(x + base.width + i, y + base.baseline, '\'', style);
             }
@@ -236,7 +246,7 @@ fn render_summation(
         buf.set(x + w_sigma - 1, y + 2, '┛', style);
 
         let inner_y = if inner.height == 1 { y + 1 } else { y };
-        render_node(inner, buf, x + w_sigma, inner_y);
+        render_inner(inner, buf, x + w_sigma, inner_y, style);
         return;
     }
 
@@ -263,7 +273,7 @@ fn render_summation(
         buf.set(x + col, y + r, ch, style);
     }
 
-    render_node(inner, buf, x + w_sigma + 1, y);
+    render_inner(inner, buf, x + w_sigma + 1, y, style);
 }
 
 fn render_product(
@@ -295,7 +305,7 @@ fn render_product(
         buf.set(x + 2, y + row, '┃', style);
     }
 
-    render_node(inner, buf, x + 4, y + 1);
+    render_inner(inner, buf, x + 4, y + 1, style);
 }
 
 fn render_integral(
@@ -321,14 +331,14 @@ fn render_integral(
         buf.set(x, y + 1, '⎜', style);
         buf.set(x, y + 2, '⎠', style);
         let inner_y = if inner.height == 1 { y + 1 } else { y };
-        render_node(inner, buf, x + 2, inner_y);
+        render_inner(inner, buf, x + 2, inner_y, style);
     } else {
         buf.set(x, y, '⎛', style);
         for row in 1..inner.height - 1 {
             buf.set(x, y + row, '⎜', style);
         }
         buf.set(x, y + inner.height - 1, '⎠', style);
-        render_node(inner, buf, x + 2, y);
+        render_inner(inner, buf, x + 2, y, style);
     }
 }
 
@@ -337,7 +347,7 @@ fn render_matrix(
     buf: &mut impl RenderTarget,
     x: usize,
     y: usize,
-    _style: Style,
+    inherited: Style,
 ) {
     let NodeKind::Matrix { name: _, rows } = &node.kind else {
         return;
@@ -398,7 +408,13 @@ fn render_matrix(
             let item_x_in_cell = (cell_width - item.width) / 2;
             let item_y_in_cell = row_cell_baseline - item.baseline;
 
-            render_node(item, buf, cell_x + item_x_in_cell, cell_y + item_y_in_cell);
+            render_inner(
+                item,
+                buf,
+                cell_x + item_x_in_cell,
+                cell_y + item_y_in_cell,
+                inherited,
+            );
         }
     }
 }

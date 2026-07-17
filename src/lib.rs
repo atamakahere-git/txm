@@ -7,8 +7,6 @@ use crate::token::tokenize;
 use std::sync::OnceLock;
 
 mod ast;
-pub mod backend;
-pub mod backends;
 mod error;
 mod glyph;
 mod layout_tree;
@@ -21,6 +19,9 @@ pub use error::ParseError;
 pub use layout_tree::{LayoutNode, LineStyle, NodeKind};
 pub use style::Style;
 
+pub mod backend;
+pub mod backends;
+
 #[cfg(feature = "ratatui")]
 pub mod ratatui;
 
@@ -32,7 +33,10 @@ pub fn layout(input: &str) -> Result<LayoutNode, ParseError> {
     let reg = registry();
     let mut parser = Parser::new(input, &tokens, reg);
     let expr = parser.parse_expr()?;
-    let mut ctx = RenderCtx::default();
+    let mut ctx = RenderCtx {
+        depth: 0,
+        current_style: Style::new().italic(),
+    };
     render_expr(&expr, reg, &mut ctx)
 }
 
@@ -190,15 +194,32 @@ fn build_registry() -> SymbolRegistry {
     r.register("abs", AbsGlyph);
     r.register("|", AbsGlyph);
 
-    for (cmd, map) in [
-        ("mathbf", to_bold as fn(char) -> char),
-        ("mathbb", to_bb),
-        ("mathrm", to_upright),
-        ("mathit", to_italic),
-        ("mathsf", to_sans),
+    r.register("mathbb", AlphabetGlyph(to_bb as fn(char) -> char));
+
+    for (cmd, modify, map) in [
+        (
+            "mathbf",
+            (|s| s.un_italic().bold()) as fn(Style) -> Style,
+            to_bold as fn(char) -> char,
+        ),
+        ("mathrm", Style::un_italic, to_upright),
+        ("mathsf", Style::un_italic, to_sans),
+        ("mathit", Style::italic, to_italic),
+        ("boldsymbol", (|s| s.bold()) as fn(Style) -> Style, to_bold),
     ] {
-        r.register(cmd, AlphabetGlyph(map));
+        r.register(cmd, MappedStyleGlyph { modify, map });
     }
+
+    for (cmd, modify) in [
+        ("text", Style::un_italic as fn(Style) -> Style),
+        ("textbf", (|s| s.un_italic().bold()) as fn(Style) -> Style),
+        ("textit", Style::italic as fn(Style) -> Style),
+        ("textrm", Style::un_italic as fn(Style) -> Style),
+    ] {
+        r.register(cmd, StyleModifierGlyph { modify });
+    }
+
+    r.register("colorbox", BgColorGlyph);
 
     for (cmd, mark) in [
         ("hat", '^'),

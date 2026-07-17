@@ -136,9 +136,32 @@ EXAMPLES:
 }
 
 #[allow(unused)]
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until 'm' (SGR sequence end)
+            for c in chars.by_ref() {
+                if c == 'm' {
+                    break;
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+#[allow(unused)]
 fn boxed(rendered: &str, f: &mut impl std::io::Write) {
     let lines: Vec<&str> = rendered.lines().collect();
-    let width = lines.iter().map(|line| line.width()).max().unwrap_or(0);
+    let width = lines
+        .iter()
+        .map(|line| strip_ansi(line).width())
+        .max()
+        .unwrap_or(0);
 
     let border = "─".repeat(width + 2);
 
@@ -146,7 +169,8 @@ fn boxed(rendered: &str, f: &mut impl std::io::Write) {
     let _ = writeln!(f, "│ {:width$} │", "", width = width);
 
     for line in lines {
-        let padding = width - line.width();
+        let visible = strip_ansi(line);
+        let padding = width - visible.width();
         let _ = writeln!(f, "│ {line}{:padding$} │", "", padding = padding);
     }
 

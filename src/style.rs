@@ -40,6 +40,26 @@ impl Style {
         self
     }
 
+    pub const fn un_bold(mut self) -> Self {
+        self.0 &= !BOLD;
+        self
+    }
+
+    pub const fn un_italic(mut self) -> Self {
+        self.0 &= !ITALIC;
+        self
+    }
+
+    pub const fn un_underline(mut self) -> Self {
+        self.0 &= !UNDERLINE;
+        self
+    }
+
+    pub const fn un_dim(mut self) -> Self {
+        self.0 &= !DIM;
+        self
+    }
+
     pub const fn fg(mut self, color: Color) -> Self {
         self.0 = (self.0 & !FG_MASK) | ((color as u16) << 5);
         self

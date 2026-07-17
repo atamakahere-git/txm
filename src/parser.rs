@@ -103,6 +103,45 @@ impl<'a> Parser<'a> {
         Ok(name)
     }
 
+    fn parse_string_arg(&mut self) -> Result<String, ParseError> {
+        self.expect(Token::LBrace)?;
+        let mut name = String::new();
+        let mut last_end: Option<usize> = None;
+
+        loop {
+            match self.peek() {
+                Some(Token::Ident(segment)) | Some(Token::Number(segment)) => {
+                    let span = self
+                        .current_span()
+                        .ok_or_else(|| ParseError("unexpected end of input".to_owned()))?;
+
+                    if let Some(prev_end) = last_end
+                        && prev_end != span.start
+                    {
+                        name.push(' ');
+                    }
+
+                    name.push_str(segment);
+                    last_end = Some(span.end);
+                    self.advance();
+                }
+                Some(Token::RBrace) => break,
+                _ => {
+                    return Err(ParseError::at(
+                        "expected a string",
+                        self.current_span()
+                            .ok_or_else(|| ParseError("unexpected eof".to_owned()))?
+                            .clone(),
+                        self.input,
+                    ));
+                }
+            }
+        }
+
+        self.advance(); // eat RBrace
+        Ok(name)
+    }
+
     pub fn parse_expr(&mut self) -> Result<Expr, ParseError> {
         self.parse_binop()
     }
@@ -487,6 +526,7 @@ impl<'a> Parser<'a> {
         #[allow(unused_mut)]
         let mut n_req = glyph.map_or(0, |g| g.required_args());
         let has_limits = glyph.is_some_and(|g| g.has_limits());
+        let takes_str = glyph.is_some_and(|g| g.takes_string_arg());
         let mut opts = Vec::new();
         let mut args = Vec::new();
 
@@ -498,15 +538,9 @@ impl<'a> Parser<'a> {
         }
 
         if !has_limits {
-            // FIXME: this shouldn't belong here.... there should be a better way to pass
-            // string argumnets. Maybe we can add `requires_string_argument` or something like
-            // that in Glyph trait?
-
-            if name == "color" {
-                self.expect(Token::LBrace)?;
-                let color_name = self.parse_continuous_string(Token::RBrace)?;
-                self.advance(); // eat RBrace
-                args.push(Expr::Ident(color_name));
+            if takes_str {
+                let text = self.parse_string_arg()?;
+                args.push(Expr::Ident(text));
                 n_req -= 1;
             }
 

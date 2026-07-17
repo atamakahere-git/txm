@@ -1,7 +1,7 @@
-use crate::ast::Expr;
-use crate::layout_tree::LayoutNode;
-use crate::style::Style;
 use crate::ParseError;
+use crate::ast::Expr;
+use crate::layout_tree::{LayoutNode, NodeKind};
+use crate::style::Style;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -21,6 +21,10 @@ pub trait Glyph: Debug + Send + Sync {
     }
 
     fn has_limits(&self) -> bool {
+        false
+    }
+
+    fn takes_string_arg(&self) -> bool {
         false
     }
 
@@ -44,12 +48,7 @@ pub trait Glyph: Debug + Send + Sync {
         Ok(self.render(&rendered_args, &rendered_opts, ctx))
     }
 
-    fn render(
-        &self,
-        _args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
+    fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], _ctx: &RenderCtx) -> LayoutNode {
         LayoutNode::empty()
     }
 }
@@ -78,13 +77,10 @@ impl SymbolRegistry {
 pub struct LimitGlyph;
 
 impl Glyph for LimitGlyph {
-    fn render(
-        &self,
-        _args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::text_str("lim")
+    fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::text_str("lim");
+        node.style = ctx.current_style;
+        node
     }
 
     fn required_args(&self) -> usize {
@@ -100,13 +96,10 @@ impl Glyph for LimitGlyph {
 pub struct UnicodeGlyph(pub char);
 
 impl Glyph for UnicodeGlyph {
-    fn render(
-        &self,
-        _args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::from_char(self.0)
+    fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::from_char(self.0);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -114,13 +107,10 @@ impl Glyph for UnicodeGlyph {
 pub struct TextGlyph(pub &'static str);
 
 impl Glyph for TextGlyph {
-    fn render(
-        &self,
-        _args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::text_str(self.0)
+    fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::text_str(self.0);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -132,19 +122,16 @@ impl Glyph for BinomGlyph {
         2
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let inner = LayoutNode::vstack(
             args[0].clone(),
             args[1].clone(),
             crate::layout_tree::LineStyle::None,
         );
 
-        LayoutNode::stretchy_delim(inner, '(', ')', false)
+        let mut node = LayoutNode::stretchy_delim(inner, '(', ')', false);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -156,17 +143,14 @@ impl Glyph for FracGlyph {
         2
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::vstack(
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::vstack(
             args[0].clone(),
             args[1].clone(),
             crate::layout_tree::LineStyle::Solid,
-        )
+        );
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -182,9 +166,11 @@ impl Glyph for SqrtGlyph {
         true
     }
 
-    fn render(&self, args: &[LayoutNode], opts: &[LayoutNode], _ctx: &mut RenderCtx) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let index = opts.first().cloned();
-        LayoutNode::sqrt(args[0].clone(), index)
+        let mut node = LayoutNode::sqrt(args[0].clone(), index);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -203,18 +189,15 @@ impl Glyph for SummationGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let inner = if args.is_empty() {
             None
         } else {
             Some(args[0].clone())
         };
-        LayoutNode::summation(inner)
+        let mut node = LayoutNode::summation(inner);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -229,18 +212,15 @@ impl Glyph for ProductGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let inner = if args.is_empty() {
             None
         } else {
             Some(args[0].clone())
         };
-        LayoutNode::product(inner)
+        let mut node = LayoutNode::product(inner);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -256,7 +236,7 @@ impl Glyph for IntegralGlyph {
         1
     }
 
-    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &mut RenderCtx) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let inner = if args.is_empty() {
             None
         } else {
@@ -276,12 +256,7 @@ impl Glyph for AlphabetGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let src = &args[0];
         match &src.kind {
             crate::layout_tree::NodeKind::Text { content } => {
@@ -290,11 +265,15 @@ impl Glyph for AlphabetGlyph {
                     width: src.width,
                     height: src.height,
                     baseline: src.baseline,
-                    style: src.style,
+                    style: ctx.current_style.merge(src.style),
                     kind: crate::layout_tree::NodeKind::Text { content: mapped },
                 }
             }
-            _ => src.clone(),
+            _ => {
+                let mut node = src.clone();
+                node.style = ctx.current_style.merge(node.style);
+                node
+            }
         }
     }
 }
@@ -308,6 +287,10 @@ pub fn to_bold(c: char) -> char {
         'A'..='Z' => shift(c, 0x1D400, c as u32 - 'A' as u32),
         'a'..='z' => shift(c, 0x1D41A, c as u32 - 'a' as u32),
         '0'..='9' => shift(c, 0x1D7CE, c as u32 - '0' as u32),
+        // Italic uppercase → bold italic uppercase
+        '\u{1D434}'..='\u{1D44D}' => shift(c, 0x1D468, c as u32 - 0x1D434),
+        // Italic lowercase → bold italic lowercase
+        '\u{1D44E}'..='\u{1D467}' => shift(c, 0x1D482, c as u32 - 0x1D44E),
         _ => c,
     }
 }
@@ -324,6 +307,17 @@ pub fn to_bb(c: char) -> char {
         'A'..='Z' => shift(c, 0x1D538, c as u32 - 'A' as u32),
         'a'..='z' => shift(c, 0x1D552, c as u32 - 'a' as u32),
         '0'..='9' => shift(c, 0x1D7D8, c as u32 - '0' as u32),
+        // Italic uppercase → double-struck (with special cases for common letters)
+        '\u{1D436}' => 'ℂ', // italic C
+        '\u{1D43B}' => 'ℍ', // italic H
+        '\u{1D441}' => 'ℕ', // italic N
+        '\u{1D443}' => 'ℙ', // italic P
+        '\u{1D444}' => 'ℚ', // italic Q
+        '\u{1D445}' => 'ℝ', // italic R
+        '\u{1D44D}' => 'ℤ', // italic Z
+        '\u{1D434}'..='\u{1D44D}' => shift(c, 0x1D538, c as u32 - 0x1D434),
+        // Italic lowercase → double-struck lowercase
+        '\u{1D44E}'..='\u{1D467}' => shift(c, 0x1D552, c as u32 - 0x1D44E),
         _ => c,
     }
 }
@@ -341,11 +335,28 @@ pub fn to_italic(c: char) -> char {
     }
 }
 
+#[allow(dead_code)]
+pub fn to_bold_italic(c: char) -> char {
+    match c {
+        'A'..='Z' => shift(c, 0x1D468, c as u32 - 'A' as u32),
+        'a'..='z' => shift(c, 0x1D482, c as u32 - 'a' as u32),
+        // Italic uppercase → bold italic uppercase
+        '\u{1D434}'..='\u{1D44D}' => shift(c, 0x1D468, c as u32 - 0x1D434),
+        // Italic lowercase → bold italic lowercase
+        '\u{1D44E}'..='\u{1D467}' => shift(c, 0x1D482, c as u32 - 0x1D44E),
+        _ => c,
+    }
+}
+
 pub fn to_sans(c: char) -> char {
     match c {
         'A'..='Z' => shift(c, 0x1D5A0, c as u32 - 'A' as u32),
         'a'..='z' => shift(c, 0x1D5BA, c as u32 - 'a' as u32),
         '0'..='9' => shift(c, 0x1D7E2, c as u32 - '0' as u32),
+        // Italic uppercase → sans-serif italic uppercase
+        '\u{1D434}'..='\u{1D44D}' => shift(c, 0x1D5A0 + 0x60, c as u32 - 0x1D434),
+        // Italic lowercase → sans-serif italic lowercase
+        '\u{1D44E}'..='\u{1D467}' => shift(c, 0x1D5BA + 0x60, c as u32 - 0x1D44E),
         _ => c,
     }
 }
@@ -358,13 +369,10 @@ impl Glyph for AbsGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::stretchy_delim(args[0].clone(), '|', '|', false)
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::stretchy_delim(args[0].clone(), '|', '|', false);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -379,13 +387,10 @@ impl Glyph for AccentGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[LayoutNode],
-        _opts: &[LayoutNode],
-        _ctx: &mut RenderCtx,
-    ) -> LayoutNode {
-        LayoutNode::accent(args[0].clone(), self.mark, self.stretch)
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
+        let mut node = LayoutNode::accent(args[0].clone(), self.mark, self.stretch);
+        node.style = ctx.current_style;
+        node
     }
 }
 
@@ -395,6 +400,10 @@ pub struct TextColorGlyph;
 impl Glyph for TextColorGlyph {
     fn required_args(&self) -> usize {
         2
+    }
+
+    fn takes_string_arg(&self) -> bool {
+        true
     }
 
     fn render_macro(
@@ -407,7 +416,7 @@ impl Glyph for TextColorGlyph {
         let color_str = if let Expr::Ident(c) = &args[0] {
             c.as_str()
         } else {
-            panic!("what")
+            return Err(ParseError("expected a color name".into()));
         };
 
         let prev_style = ctx.current_style;
@@ -416,6 +425,107 @@ impl Glyph for TextColorGlyph {
         let result = eval(&args[1], ctx);
 
         ctx.current_style = prev_style;
+        result
+    }
+}
+
+#[derive(Debug)]
+pub struct StyleModifierGlyph {
+    pub modify: fn(Style) -> Style,
+}
+
+impl Glyph for StyleModifierGlyph {
+    fn required_args(&self) -> usize {
+        1
+    }
+
+    fn render_macro(
+        &self,
+        args: &[Expr],
+        _opts: &[Expr],
+        ctx: &mut RenderCtx,
+        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<LayoutNode, ParseError>,
+    ) -> Result<LayoutNode, ParseError> {
+        let prev = ctx.current_style;
+        ctx.current_style = (self.modify)(ctx.current_style);
+        let result = eval(&args[0], ctx);
+        ctx.current_style = prev;
+        result
+    }
+}
+
+#[derive(Debug)]
+pub struct MappedStyleGlyph {
+    pub modify: fn(Style) -> Style,
+    pub map: fn(char) -> char,
+}
+
+impl Glyph for MappedStyleGlyph {
+    fn required_args(&self) -> usize {
+        1
+    }
+
+    fn render_macro(
+        &self,
+        args: &[Expr],
+        _opts: &[Expr],
+        ctx: &mut RenderCtx,
+        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<LayoutNode, ParseError>,
+    ) -> Result<LayoutNode, ParseError> {
+        let prev = ctx.current_style;
+        ctx.current_style = (self.modify)(ctx.current_style);
+        let mut result = eval(&args[0], ctx)?;
+        ctx.current_style = prev;
+        map_node_chars(&mut result, self.map);
+        Ok(result)
+    }
+}
+
+fn map_node_chars(node: &mut LayoutNode, map: fn(char) -> char) {
+    match &mut node.kind {
+        NodeKind::Text { content } => {
+            for c in content.iter_mut() {
+                *c = map(*c);
+            }
+        }
+        NodeKind::HStack { children, .. } => {
+            for child in children.iter_mut() {
+                map_node_chars(child, map);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[derive(Debug)]
+pub struct BgColorGlyph;
+
+impl Glyph for BgColorGlyph {
+    fn required_args(&self) -> usize {
+        2
+    }
+
+    fn takes_string_arg(&self) -> bool {
+        true
+    }
+
+    fn render_macro(
+        &self,
+        args: &[Expr],
+        _opts: &[Expr],
+        ctx: &mut RenderCtx,
+        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<LayoutNode, ParseError>,
+    ) -> Result<LayoutNode, ParseError> {
+        let color_str = if let Expr::Ident(c) = &args[0] {
+            c.as_str()
+        } else {
+            return Err(ParseError("expected a color name".into()));
+        };
+
+        let prev = ctx.current_style;
+        ctx.current_style = ctx.current_style.bg(crate::style::parse_color(color_str)?);
+        let result = eval(&args[1], ctx);
+        ctx.current_style = prev;
         result
     }
 }

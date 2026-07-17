@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::error::ParseError;
-use crate::glyph::{RenderCtx, SymbolRegistry};
+use crate::glyph::{RenderCtx, SymbolRegistry, to_italic};
 use crate::layout_tree::LayoutNode;
 
 pub fn render(
@@ -9,7 +9,18 @@ pub fn render(
     ctx: &mut RenderCtx,
 ) -> Result<LayoutNode, ParseError> {
     match expr {
-        Expr::Ident(s) | Expr::Number(s) => {
+        Expr::Ident(s) => {
+            let chars: Vec<char> = if ctx.current_style.is_italic() {
+                s.chars().map(to_italic).collect()
+            } else {
+                s.chars().collect()
+            };
+            let mut node = LayoutNode::text(chars);
+            node.style = ctx.current_style;
+            Ok(node)
+        }
+
+        Expr::Number(s) => {
             let mut node = LayoutNode::text_str(s);
             node.style = ctx.current_style;
             Ok(node)
