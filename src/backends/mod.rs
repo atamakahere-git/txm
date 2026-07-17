@@ -1,2 +1,2 @@
-pub mod terminal;
 mod generic_backend;
+pub mod terminal;

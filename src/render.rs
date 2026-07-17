@@ -68,11 +68,7 @@ pub fn render(
             {
                 let base_r = render(base, reg, ctx)?;
                 let sup_r = render(sup, reg, ctx)?;
-                return Ok(LayoutNode::limits(
-                    base_r,
-                    LayoutNode::empty(),
-                    sup_r,
-                ));
+                return Ok(LayoutNode::limits(base_r, LayoutNode::empty(), sup_r));
             }
 
             let base = render(base, reg, ctx)?;
@@ -86,11 +82,7 @@ pub fn render(
             {
                 let base_r = render(base, reg, ctx)?;
                 let sub_r = render(sub, reg, ctx)?;
-                return Ok(LayoutNode::limits(
-                    base_r,
-                    sub_r,
-                    LayoutNode::empty(),
-                ));
+                return Ok(LayoutNode::limits(base_r, sub_r, LayoutNode::empty()));
             }
 
             let base = render(base, reg, ctx)?;
