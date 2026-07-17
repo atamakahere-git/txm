@@ -97,9 +97,7 @@ pub struct UnicodeGlyph(pub char);
 
 impl Glyph for UnicodeGlyph {
     fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
-        let mut node = LayoutNode::from_char(self.0);
-        node.style = ctx.current_style;
-        node
+        LayoutNode::text_with_style(vec![self.0], ctx.current_style.un_italic())
     }
 }
 
@@ -108,9 +106,7 @@ pub struct TextGlyph(pub &'static str);
 
 impl Glyph for TextGlyph {
     fn render(&self, _args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
-        let mut node = LayoutNode::text_str(self.0);
-        node.style = ctx.current_style;
-        node
+        LayoutNode::text_with_style(self.0.chars().collect(), ctx.current_style.un_italic())
     }
 }
 
@@ -242,6 +238,7 @@ impl Glyph for IntegralGlyph {
         } else {
             Some(args[0].clone())
         };
+
         let mut node = LayoutNode::integral(inner);
         node.style = ctx.current_style;
         node

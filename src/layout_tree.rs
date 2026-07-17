@@ -34,11 +34,13 @@ pub enum NodeKind {
     },
 
     Superscript {
+        inline: bool,
         base: Box<LayoutNode>,
         exp: Box<LayoutNode>,
     },
 
     Subscript {
+        inline: bool,
         base: Box<LayoutNode>,
         sub: Box<LayoutNode>,
     },
@@ -223,10 +225,33 @@ impl LayoutNode {
         }
     }
 
-    pub fn superscript(base: LayoutNode, exp: LayoutNode) -> Self {
-        let height = exp.height + base.height;
+    pub fn superscript(base: LayoutNode, mut exp: LayoutNode) -> Self {
+        let mut height = exp.height + base.height;
         let width = exp.width + base.width;
-        let baseline = base.baseline + exp.height;
+        let mut baseline = base.baseline + exp.height;
+        let mut inline = false;
+
+        if let NodeKind::Text { content } = &exp.kind
+            && exp.height == 1
+        {
+            let converted = content
+                .iter()
+                .map_while(|&i| to_superscript_char(i))
+                .collect::<Vec<_>>();
+
+            // conversion was successful
+            if converted.len() == content.len() {
+                let NodeKind::Text { content } = &mut exp.kind else {
+                    // SAFETY: we already checked the type
+                    unreachable!()
+                };
+
+                *content = converted;
+                height -= 1;
+                baseline -= exp.height;
+                inline = true;
+            }
+        }
 
         Self {
             width,
@@ -234,15 +259,38 @@ impl LayoutNode {
             baseline,
             style: Style::new(),
             kind: NodeKind::Superscript {
+                inline,
                 base: Box::new(base),
                 exp: Box::new(exp),
             },
         }
     }
 
-    pub fn subscript(base: LayoutNode, sub: LayoutNode) -> Self {
-        let height = (base.baseline + 1 + sub.height).max(base.height);
+    pub fn subscript(base: LayoutNode, mut sub: LayoutNode) -> Self {
+        let mut height = base.height + sub.height;
         let width = base.width + sub.width;
+        let mut inline = false;
+
+        if let NodeKind::Text { content } = &sub.kind
+            && sub.height == 1
+        {
+            let converted = content
+                .iter()
+                .map_while(|&i| to_subscript_char(i))
+                .collect::<Vec<_>>();
+
+            // conversion was successful
+            if converted.len() == content.len() {
+                let NodeKind::Text { content } = &mut sub.kind else {
+                    // SAFETY: we already checked the type
+                    unreachable!()
+                };
+
+                *content = converted;
+                height -= 1;
+                inline = true;
+            }
+        }
 
         Self {
             width,
@@ -250,6 +298,7 @@ impl LayoutNode {
             baseline: base.baseline,
             style: Style::new(),
             kind: NodeKind::Subscript {
+                inline,
                 base: Box::new(base),
                 sub: Box::new(sub),
             },
@@ -560,4 +609,39 @@ impl LayoutNode {
 
         Ok(Self::stretchy_delim(inner, left_delim, right_delim, true))
     }
+}
+
+#[rustfmt::skip]
+fn to_superscript_char(c: char) -> Option<char> {
+    Some (match c {
+        '0' => '⁰', '1' => '¹', '2' => '²', '3' => '³', '4' => '⁴',
+        '5' => '⁵', '6' => '⁶', '7' => '⁷', '8' => '⁸', '9' => '⁹',
+        'a' => 'ᵃ', 'b' => 'ᵇ', 'c' => 'ᶜ', 'd' => 'ᵈ', 'e' => 'ᵉ',
+        'f' => 'ᶠ', 'g' => 'ᵍ', 'h' => 'ʰ', 'i' => 'ⁱ', 'j' => 'ʲ',
+        'k' => 'ᵏ', 'l' => 'ˡ', 'm' => 'ᵐ', 'n' => 'ⁿ', 'o' => 'ᵒ',
+        'p' => 'ᵖ', 'r' => 'ʳ', 's' => 'ˢ', 't' => 'ᵗ', 'u' => 'ᵘ',
+        'v' => 'ᵛ', 'w' => 'ʷ', 'x' => 'ˣ', 'y' => 'ʸ', 'z' => 'ᶻ',
+        'A' => 'ᴬ', 'B' => 'ᴮ', 'D' => 'ᴰ', 'E' => 'ᴱ', 'G' => 'ᴳ',
+        'H' => 'ᴴ', 'I' => 'ᴵ', 'J' => 'ᴶ', 'M' => 'ᴹ', 'N' => 'ᴺ',
+        'O' => 'ᴼ', 'P' => 'ᴾ', 'R' => 'ᴿ', 'T' => 'ᵀ', 'U' => 'ᵁ',
+        'W' => 'ᵂ', '+' => '⁺', '-' => '⁻', '=' => '⁼', '(' => '⁽',
+        ')' => '⁾',
+
+        _ => return None,
+    })
+}
+
+#[rustfmt::skip]
+fn to_subscript_char(c: char) -> Option<char> {
+    Some(match c {
+        '0' => '₀', '1' => '₁', '2' => '₂', '3' => '₃', '4' => '₄',
+        '5' => '₅', '6' => '₆', '7' => '₇', '8' => '₈', '9' => '₉',
+        'a' => 'ₐ', 'e' => 'ₑ', 'h' => 'ₕ', 'i' => 'ᵢ', 'j' => 'ⱼ',
+        'k' => 'ₖ', 'l' => 'ₗ', 'm' => 'ₘ', 'n' => 'ₙ', 'o' => 'ₒ',
+        'p' => 'ₚ', 'r' => 'ᵣ', 's' => 'ₛ', 't' => 'ₜ', 'u' => 'ᵤ',
+        'v' => 'ᵥ', 'x' => 'ₓ', 'y' => 'ᵧ', '+' => '₊', '-' => '₋', '=' => '₌',
+        '(' => '₍', ')' => '₎',
+
+        _ => return None,
+    })
 }

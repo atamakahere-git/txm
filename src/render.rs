@@ -10,12 +10,7 @@ pub fn render(
 ) -> Result<LayoutNode, ParseError> {
     match expr {
         Expr::Ident(s) => {
-            let chars: Vec<char> = if ctx.current_style.is_italic() {
-                s.chars().map(to_italic).collect()
-            } else {
-                s.chars().collect()
-            };
-            let mut node = LayoutNode::text(chars);
+            let mut node = LayoutNode::text(s.chars().collect());
             node.style = ctx.current_style;
             Ok(node)
         }

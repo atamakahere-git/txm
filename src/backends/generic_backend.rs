@@ -65,15 +65,18 @@ fn render_inner(
             render_inner(rhs, buf, x + lhs.width + 3, rhs_y, style);
         }
 
-        NodeKind::Superscript { base, exp } => {
+        NodeKind::Superscript { inline, base, exp } => {
+            let inline_shift = if !inline { exp.height } else { 0 };
+
             render_inner(exp, buf, x + base.width, y, style);
-            render_inner(base, buf, x, y + exp.height, style);
+            render_inner(base, buf, x, y + inline_shift, style);
         }
 
-        NodeKind::Subscript { base, sub } => {
+        NodeKind::Subscript { inline, base, sub } => {
+            let inline_shift = if !inline { base.height } else { 0 };
+
             render_inner(base, buf, x, y, style);
-            let sub_y = y + base.baseline + 1;
-            render_inner(sub, buf, x + base.width, sub_y, style);
+            render_inner(sub, buf, x + base.width, y + inline_shift, style);
         }
 
         NodeKind::BothScripts { base, sub, sup } => {
