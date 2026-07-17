@@ -47,10 +47,7 @@ fn main() {
                 if config.unboxed {
                     print!("{rendered}");
                 } else {
-                    cfg_select! {
-                        feature = "fancy" => println!("{rendered}"),
-                        _  => boxed(&rendered, &mut std::io::stdout()),
-                    }
+                    boxed(&rendered, &mut std::io::stdout());
                 }
             }
             Err(e) => {
@@ -78,7 +75,6 @@ fn parse_args() -> Result<Cli, String> {
             "--version" => return Ok(Cli::Version),
             "--unboxed" => unboxed = true,
             "--file" => {
-                // grab the next token for the file path
                 let path_arg = args
                     .next()
                     .ok_or_else(|| "missing file path after '--file'".to_string())?;
@@ -142,11 +138,7 @@ EXAMPLES:
 #[allow(unused)]
 fn boxed(rendered: &str, f: &mut impl std::io::Write) {
     let lines: Vec<&str> = rendered.lines().collect();
-    let width = lines
-        .iter()
-        .map(|line| line.width()) // Use the extension trait method directly
-        .max()
-        .unwrap_or(0);
+    let width = lines.iter().map(|line| line.width()).max().unwrap_or(0);
 
     let border = "─".repeat(width + 2);
 

@@ -1,17 +1,13 @@
-use crate::ParseError;
 use crate::ast::Expr;
-use crate::buffer::RenderBuffer;
-use crate::layout::RenderNode;
+use crate::layout_tree::LayoutNode;
+use crate::style::Style;
+use crate::ParseError;
 use std::collections::HashMap;
 use std::fmt::Debug;
-
-#[cfg(feature = "fancy")]
-use crate::style::Style;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RenderCtx {
     pub depth: usize,
-    #[cfg(feature = "fancy")]
     pub current_style: Style,
 }
 
@@ -28,27 +24,13 @@ pub trait Glyph: Debug + Send + Sync {
         false
     }
 
-    // FIXME: I couldn't think of a better way of doing this without
-    // having to make changes all over the project.
-    // And this looks bad.
-    //
-    // The style is actually applied in `crate::render::render`, currently style which
-    // lives in the RenderCtx is also managed by the same function, but for commands
-    // like \color, we actually have to change the `ctx.current_style` property
-    // but in `crate::render::render` function, the Command's arguments and optional
-    // arguments are already rendered using the original `ctx.current_style` before
-    // calling the Glyph::render
-    //
-    // To deal with this, i created the following higher order function, eval is
-    // supposed to contain `crate::render::render` function, this makes changes
-    // to the `ctx.current_style` before calling render on arguments and optional arguments.
     fn render_macro(
         &self,
         args: &[Expr],
         opts: &[Expr],
         ctx: &mut RenderCtx,
-        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<RenderNode, ParseError>,
-    ) -> Result<RenderNode, ParseError> {
+        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<LayoutNode, ParseError>,
+    ) -> Result<LayoutNode, ParseError> {
         let mut rendered_args = Vec::with_capacity(args.len());
         for arg in args {
             rendered_args.push(eval(arg, ctx)?);
@@ -64,11 +46,11 @@ pub trait Glyph: Debug + Send + Sync {
 
     fn render(
         &self,
-        _args: &[RenderNode],
-        _opts: &[RenderNode],
+        _args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::new(0, 0, 0)
+    ) -> LayoutNode {
+        LayoutNode::empty()
     }
 }
 
@@ -98,11 +80,11 @@ pub struct LimitGlyph;
 impl Glyph for LimitGlyph {
     fn render(
         &self,
-        _args: &[RenderNode],
-        _opts: &[RenderNode],
+        _args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::from_str("lim")
+    ) -> LayoutNode {
+        LayoutNode::from_str("lim")
     }
 
     fn required_args(&self) -> usize {
@@ -120,11 +102,11 @@ pub struct UnicodeGlyph(pub char);
 impl Glyph for UnicodeGlyph {
     fn render(
         &self,
-        _args: &[RenderNode],
-        _opts: &[RenderNode],
+        _args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::from_char(self.0)
+    ) -> LayoutNode {
+        LayoutNode::from_char(self.0)
     }
 }
 
@@ -134,11 +116,11 @@ pub struct TextGlyph(pub &'static str);
 impl Glyph for TextGlyph {
     fn render(
         &self,
-        _args: &[RenderNode],
-        _opts: &[RenderNode],
+        _args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::from_str(self.0)
+    ) -> LayoutNode {
+        LayoutNode::from_str(self.0)
     }
 }
 
@@ -150,9 +132,19 @@ impl Glyph for BinomGlyph {
         2
     }
 
-    fn render(&self, args: &[RenderNode], _opts: &[RenderNode], ctx: &mut RenderCtx) -> RenderNode {
-        let inner = RenderNode::vstack(&args[0], &args[1], ' ', 0, ctx);
-        RenderNode::stretchy_delim(&inner, '(', ')', false)
+    fn render(
+        &self,
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
+        _ctx: &mut RenderCtx,
+    ) -> LayoutNode {
+        let inner = LayoutNode::vstack(
+            args[0].clone(),
+            args[1].clone(),
+            crate::layout_tree::LineStyle::None,
+        );
+
+        LayoutNode::stretchy_delim(inner, '(', ')', false)
     }
 }
 
@@ -164,9 +156,17 @@ impl Glyph for FracGlyph {
         2
     }
 
-    fn render(&self, args: &[RenderNode], _opts: &[RenderNode], ctx: &mut RenderCtx) -> RenderNode {
-        let pad = if ctx.depth == 0 { 1 } else { 0 };
-        RenderNode::vstack(&args[0], &args[1], '─', pad, ctx)
+    fn render(
+        &self,
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
+        _ctx: &mut RenderCtx,
+    ) -> LayoutNode {
+        LayoutNode::vstack(
+            args[0].clone(),
+            args[1].clone(),
+            crate::layout_tree::LineStyle::Solid,
+        )
     }
 }
 
@@ -182,25 +182,9 @@ impl Glyph for SqrtGlyph {
         true
     }
 
-    fn render(&self, args: &[RenderNode], opts: &[RenderNode], _ctx: &mut RenderCtx) -> RenderNode {
-        let radicand = RenderNode::sqrt_inner(&args[0]);
-        if let Some(root) = opts.first() {
-            let w = root.width + radicand.width;
-            let h = root.height.max(radicand.height);
-            let mut buffer = RenderBuffer::new(w, h);
-
-            root.blit_into(&mut buffer, w, 0, 0);
-            radicand.blit_into(&mut buffer, w, root.width, 0);
-
-            RenderNode {
-                width: w,
-                height: h,
-                baseline: radicand.baseline,
-                buffer,
-            }
-        } else {
-            radicand
-        }
+    fn render(&self, args: &[LayoutNode], opts: &[LayoutNode], _ctx: &mut RenderCtx) -> LayoutNode {
+        let index = opts.first().cloned();
+        LayoutNode::sqrt(args[0].clone(), index)
     }
 }
 
@@ -221,83 +205,16 @@ impl Glyph for SummationGlyph {
 
     fn render(
         &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        if args.is_empty() {
-            return RenderNode {
-                width: 4,
-                height: 3,
-                baseline: 1,
-                buffer: vec!['━', '━', '┓', ' ', '❯', ' ', ' ', ' ', '━', '━', '┛', ' '].into(),
-            };
-        }
-
-        let inner = &args[0];
-        if inner.height <= 2 {
-            let w = inner.width + 4;
-            let mut data = RenderBuffer::new(w, 3);
-
-            data[0..3].copy_from_slice(&['━', '━', '┓']);
-            data[w..w + 3].copy_from_slice(&['⟩', ' ', ' ']);
-            data[2 * w..2 * w + 3].copy_from_slice(&['━', '━', '┛']);
-            inner.blit_into(&mut data, w, 4, if inner.height == 1 { 1 } else { 0 });
-
-            return RenderNode {
-                width: w,
-                height: 3,
-                baseline: 1,
-                buffer: data,
-            };
-        }
-
-        let h = inner.height;
-        let w_sigma = ((1.5 * h as f32) as usize).max(h / 2 + 2);
-        let w = w_sigma + 1 + inner.width; // 1 space padding
-        let mut buffer = RenderBuffer::new(w, h);
-
-        // first row
-        buffer[w_sigma - 1] = '┓';
-        for c in buffer.data_mut().iter_mut().take(w_sigma - 1) {
-            *c = '━';
-        }
-
-        // last row
-        buffer[w * (h - 1) + w_sigma - 1] = '┛';
-        for c in buffer
-            .data_mut()
-            .iter_mut()
-            .skip(w * (h - 1))
-            .take(w_sigma - 1)
-        {
-            *c = '━';
-        }
-
-        for r in 1..h - 1 {
-            let row_offset = r * w;
-            let d = r.min(h - 1 - r);
-            let col = d - 1;
-
-            let ch = if !h.is_multiple_of(2) && r == h / 2 {
-                '⟩'
-            } else if r < h / 2 {
-                '╲'
-            } else {
-                '╱'
-            };
-
-            buffer[row_offset + col] = ch;
-        }
-
-        inner.blit_into(&mut buffer, w, w_sigma + 1, 0);
-
-        RenderNode {
-            width: w,
-            height: h,
-            baseline: inner.baseline,
-            buffer,
-        }
+    ) -> LayoutNode {
+        let inner = if args.is_empty() {
+            None
+        } else {
+            Some(args[0].clone())
+        };
+        LayoutNode::summation(inner)
     }
 }
 
@@ -314,36 +231,16 @@ impl Glyph for ProductGlyph {
 
     fn render(
         &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        if args.is_empty() {
-            return RenderNode {
-                width: 4,
-                height: 2,
-                baseline: 1,
-                buffer: vec!['┳', '━', '┳', ' ', '┃', ' ', '┃', ' '].into(),
-            };
-        }
-
-        let inner = &args[0];
-
-        let w = inner.width + 4;
-        let h = inner.height.max(1) + 1;
-        let mut data = RenderBuffer::new(w, h);
-        data[0..4].copy_from_slice(&['┳', '━', '┳', ' ']);
-        for row in 1..h {
-            data[row * w..row * w + 4].copy_from_slice(&['┃', ' ', '┃', ' ']);
-        }
-        inner.blit_into(&mut data, w, 4, 1);
-
-        RenderNode {
-            width: w,
-            height: h,
-            baseline: inner.baseline + 1,
-            buffer: data,
-        }
+    ) -> LayoutNode {
+        let inner = if args.is_empty() {
+            None
+        } else {
+            Some(args[0].clone())
+        };
+        LayoutNode::product(inner)
     }
 }
 
@@ -359,60 +256,18 @@ impl Glyph for IntegralGlyph {
         1
     }
 
-    fn render(
-        &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
-        #[allow(unused)] ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        #[cfg(feature = "fancy")]
-        let current_style = ctx.current_style;
-
-        // Render a fixed-length integral symbol
-        if args.is_empty() {
-            #[allow(unused_mut)]
-            let mut n = RenderNode {
-                width: 2, // symbol + space
-                height: 3,
-                baseline: 1,
-                buffer: vec!['⎛', ' ', '⎜', ' ', '⎠', ' '].into(),
-            };
-
-            #[cfg(feature = "fancy")]
-            n.apply_style(current_style);
-
-            n
+    fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &mut RenderCtx) -> LayoutNode {
+        let inner = if args.is_empty() {
+            None
         } else {
-            // no stretching required
-            if args[0].height <= 3 {
-                let w = args[0].width + 2; // symbol + space
-                let mut buffer = RenderBuffer::new(w, 3);
-
-                buffer[0] = '⎛';
-                buffer[w] = '⎜';
-                buffer[2 * w] = '⎠';
-
-                // center one-liner expressions
-                let y = if args[0].height == 1 { 1 } else { 0 };
-                args[0].blit_into(&mut buffer, w, 2, y);
-
-                return RenderNode {
-                    width: w,
-                    height: 3,
-                    baseline: 1,
-                    buffer,
-                };
-            }
-
-            RenderNode::stretchy_delim_left(&args[0], '⎛', '⎜', '⎠')
-        }
+            Some(args[0].clone())
+        };
+        let mut node = LayoutNode::integral(inner);
+        node.style = ctx.current_style;
+        node
     }
 }
 
-/// A font-alphabet command (`\mathbf`, `\mathbb`, `\mathrm`, ...): takes one
-/// argument and remaps each character of it through `.0`. Characters with no
-/// variant in the target alphabet (spaces, operators, digits in italic) pass
-/// through unchanged.
 #[derive(Debug)]
 pub struct AlphabetGlyph(pub fn(char) -> char);
 
@@ -423,21 +278,23 @@ impl Glyph for AlphabetGlyph {
 
     fn render(
         &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
+    ) -> LayoutNode {
         let src = &args[0];
-        let mut buffer = src.buffer.clone();
-        for ele in buffer.data_mut().iter_mut() {
-            *ele = (self.0)(*ele)
-        }
-
-        RenderNode {
-            width: src.width,
-            height: src.height,
-            baseline: src.baseline,
-            buffer,
+        match &src.kind {
+            crate::layout_tree::NodeKind::Text { content } => {
+                let mapped: Vec<char> = content.iter().map(|&c| (self.0)(c)).collect();
+                LayoutNode {
+                    width: src.width,
+                    height: src.height,
+                    baseline: src.baseline,
+                    style: src.style,
+                    kind: crate::layout_tree::NodeKind::Text { content: mapped },
+                }
+            }
+            _ => src.clone(),
         }
     }
 }
@@ -446,7 +303,6 @@ fn shift(c: char, base: u32, off: u32) -> char {
     char::from_u32(base + off).unwrap_or(c)
 }
 
-/// Mathematical bold (𝐀-𝐳, 𝟎-𝟗).
 pub fn to_bold(c: char) -> char {
     match c {
         'A'..='Z' => shift(c, 0x1D400, c as u32 - 'A' as u32),
@@ -456,10 +312,8 @@ pub fn to_bold(c: char) -> char {
     }
 }
 
-/// Blackboard bold / double-struck (ℝ, ℍ, ℂ, ...).
 pub fn to_bb(c: char) -> char {
     match c {
-        // Letters that live in the Letterlike Symbols block, not the contiguous run.
         'C' => 'ℂ',
         'H' => 'ℍ',
         'N' => 'ℕ',
@@ -474,23 +328,19 @@ pub fn to_bb(c: char) -> char {
     }
 }
 
-/// Upright roman (`\mathrm`, `\mathup`): terminal glyphs are already upright,
-/// so this is the identity and simply lets the argument render normally.
 pub fn to_upright(c: char) -> char {
     c
 }
 
-/// Mathematical italic (𝐴-𝑧).
 pub fn to_italic(c: char) -> char {
     match c {
-        'h' => 'ℎ', // U+1D455 is reserved; Planck constant stands in.
+        'h' => 'ℎ',
         'A'..='Z' => shift(c, 0x1D434, c as u32 - 'A' as u32),
         'a'..='z' => shift(c, 0x1D44E, c as u32 - 'a' as u32),
         _ => c,
     }
 }
 
-/// Sans-serif (𝖠-𝗓, 𝟢-𝟫).
 pub fn to_sans(c: char) -> char {
     match c {
         'A'..='Z' => shift(c, 0x1D5A0, c as u32 - 'A' as u32),
@@ -510,17 +360,14 @@ impl Glyph for AbsGlyph {
 
     fn render(
         &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::stretchy_delim(&args[0], '|', '|', false)
+    ) -> LayoutNode {
+        LayoutNode::stretchy_delim(args[0].clone(), '|', '|', false)
     }
 }
 
-/// An accent command (`\hat`, `\tilde`, `\bar`, `\vec`, `\overline`, ...):
-/// takes one argument and draws `mark` above it. `stretch` spans the mark
-/// across the whole width (wide accents); otherwise it is centred.
 #[derive(Debug)]
 pub struct AccentGlyph {
     pub mark: char,
@@ -534,19 +381,17 @@ impl Glyph for AccentGlyph {
 
     fn render(
         &self,
-        args: &[RenderNode],
-        _opts: &[RenderNode],
+        args: &[LayoutNode],
+        _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
-    ) -> RenderNode {
-        RenderNode::accent(&args[0], self.mark, self.stretch)
+    ) -> LayoutNode {
+        LayoutNode::accent(args[0].clone(), self.mark, self.stretch)
     }
 }
 
-#[cfg(feature = "fancy")]
 #[derive(Debug)]
 pub struct TextColorGlyph;
 
-#[cfg(feature = "fancy")]
 impl Glyph for TextColorGlyph {
     fn required_args(&self) -> usize {
         2
@@ -557,8 +402,8 @@ impl Glyph for TextColorGlyph {
         args: &[Expr],
         _opts: &[Expr],
         ctx: &mut RenderCtx,
-        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<RenderNode, ParseError>,
-    ) -> Result<RenderNode, ParseError> {
+        eval: &mut dyn FnMut(&Expr, &mut RenderCtx) -> Result<LayoutNode, ParseError>,
+    ) -> Result<LayoutNode, ParseError> {
         let color_str = if let Expr::Ident(c) = &args[0] {
             c.as_str()
         } else {

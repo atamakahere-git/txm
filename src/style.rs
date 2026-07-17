@@ -1,8 +1,5 @@
-#![allow(unused)]
-
 use std::fmt;
 
-#[cfg(feature = "fancy")]
 use crate::ParseError;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -15,10 +12,8 @@ const ITALIC: u16 = 1 << 1;
 const UNDERLINE: u16 = 1 << 2;
 const DIM: u16 = 1 << 3;
 
-const FG_MASK: u16 = 0b000001111100000; // Bits 5-9
-const BG_MASK: u16 = 0b111110000000000; // Bits 10-14
-const FG_SHIFT: u16 = 5;
-const BG_SHIFT: u16 = 10;
+const FG_MASK: u16 = 0b000001111100000;
+const BG_MASK: u16 = 0b111110000000000;
 
 impl Style {
     pub const fn new() -> Self {
@@ -46,12 +41,12 @@ impl Style {
     }
 
     pub const fn fg(mut self, color: Color) -> Self {
-        self.0 = (self.0 & !FG_MASK) | ((color as u16) << FG_SHIFT);
+        self.0 = (self.0 & !FG_MASK) | ((color as u16) << 5);
         self
     }
 
     pub const fn bg(mut self, color: Color) -> Self {
-        self.0 = (self.0 & !BG_MASK) | ((color as u16) << BG_SHIFT);
+        self.0 = (self.0 & !BG_MASK) | ((color as u16) << 10);
         self
     }
 
@@ -72,12 +67,12 @@ impl Style {
     }
 
     pub const fn fg_color(self) -> Color {
-        let raw = (self.0 & FG_MASK) >> FG_SHIFT;
+        let raw = (self.0 & FG_MASK) >> 5;
         Color::from_u16(raw)
     }
 
     pub const fn bg_color(self) -> Color {
-        let raw = (self.0 & BG_MASK) >> BG_SHIFT;
+        let raw = (self.0 & BG_MASK) >> 10;
         Color::from_u16(raw)
     }
 
@@ -135,9 +130,8 @@ impl Style {
             let fg_code = match fg as u16 {
                 0 => unreachable!(),
                 1..=8 => 29 + fg as u16,
-                _ => 81 + fg as u16, // bright colors
+                _ => 81 + fg as u16,
             };
-
             write!(f, "{}{}", if first { "" } else { ";" }, fg_code)?;
             first = false;
         }
@@ -146,9 +140,8 @@ impl Style {
             let bg_code = match bg as u16 {
                 0 => unreachable!(),
                 1..=8 => 39 + bg as u16,
-                _ => 91 + bg as u16, // Bright backgrounds map to 100-107
+                _ => 91 + bg as u16,
             };
-
             write!(f, "{}{}", if first { "" } else { ";" }, bg_code)?;
         }
 
@@ -204,7 +197,6 @@ impl Color {
     }
 }
 
-#[cfg(feature = "fancy")]
 pub fn parse_color(s: &str) -> Result<Color, ParseError> {
     Ok(match s {
         "red" => Color::Red,

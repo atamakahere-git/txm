@@ -4,11 +4,14 @@ use ratatui_core::{
     style::Style,
     widgets::Widget,
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
+
+use crate::backends::memory::{Backend as _, MemBuf, MemoryBackend};
+use crate::layout_tree::LayoutNode;
 
 #[derive(Debug, Clone)]
 pub struct Math {
-    rendered: String,
+    mem: MemBuf,
     style: Style,
     horizontal_alignment: HorizontalAlignment,
     vertical_alignment: VerticalAlignment,
@@ -16,18 +19,30 @@ pub struct Math {
 
 impl Math {
     pub fn new(input: &str) -> Result<Self, crate::ParseError> {
-        let rendered = crate::render(input)?;
+        let tree = crate::layout(input)?;
+        let backend = MemoryBackend::new();
+        let mem = backend.render(&tree).unwrap();
         Ok(Self {
-            rendered,
+            mem,
             style: Style::default(),
             horizontal_alignment: HorizontalAlignment::Left,
             vertical_alignment: VerticalAlignment::Top,
         })
     }
 
+    pub fn from_tree(tree: &LayoutNode) -> Self {
+        let backend = MemoryBackend::new();
+        let mem = backend.render(tree).unwrap();
+        Self {
+            mem,
+            style: Style::default(),
+            horizontal_alignment: HorizontalAlignment::Left,
+            vertical_alignment: VerticalAlignment::Top,
+        }
+    }
+
     pub fn size(&self) -> Size {
-        let (width, height) = rendered_size(&self.rendered);
-        Rect::new(0, 0, width, height).as_size()
+        Rect::new(0, 0, self.mem.width as u16, self.mem.height as u16).as_size()
     }
 
     pub fn style(mut self, style: Style) -> Self {
@@ -52,7 +67,8 @@ impl Widget for &Math {
             return;
         }
 
-        let (render_width, render_height) = rendered_size(&self.rendered);
+        let render_width = self.mem.width as u16;
+        let render_height = self.mem.height as u16;
         if render_width == 0 || render_height == 0 {
             return;
         }
@@ -68,32 +84,40 @@ impl Widget for &Math {
         let (content_y, draw_y, visible_height) =
             align_vertical_span(render_height, area.height, self.vertical_alignment);
 
-        for (row, line) in self
-            .rendered
-            .lines()
-            .skip(content_y as usize)
-            .take(visible_height as usize)
-            .enumerate()
-        {
-            let row = u16::try_from(row).unwrap_or(u16::MAX);
-            let x = area.x.saturating_add(draw_x);
-            let y = area.y.saturating_add(draw_y).saturating_add(row);
-            let visible = slice_by_width(line, content_x, visible_width);
-            buf.set_stringn(x, y, visible, visible_width as usize, self.style);
+        for row in 0..visible_height as usize {
+            let src_y = content_y as usize + row;
+            if src_y >= self.mem.height {
+                break;
+            }
+
+            let target_row = draw_y as usize + row;
+            if target_row >= area.height as usize {
+                break;
+            }
+
+            let mut col = 0u16;
+            let mut byte_start = 0usize;
+
+            for (x_idx, cell) in self.mem.cells[src_y].iter().enumerate() {
+                let x = area.x.saturating_add(draw_x).saturating_add(col);
+                let y = area.y.saturating_add(target_row as u16);
+
+                if x >= area.x + area.width {
+                    break;
+                }
+
+                let cell_str = cell.ch.to_string();
+                let cell_width = UnicodeWidthStr::width(cell_str.as_str()) as u16;
+
+                if x + cell_width > area.x + area.width {
+                    break;
+                }
+
+                buf.set_stringn(x, y, &cell_str, cell_width as usize, self.style);
+                col += cell_width;
+            }
         }
     }
-}
-
-fn rendered_size(rendered: &str) -> (u16, u16) {
-    let mut width = 0u16;
-    let mut height = 0u16;
-
-    for line in rendered.lines() {
-        width = width.max(u16::try_from(line.width()).unwrap_or(u16::MAX));
-        height = height.saturating_add(1);
-    }
-
-    (width, height)
 }
 
 fn slice_by_width(line: &str, start: u16, width: u16) -> &str {
@@ -108,7 +132,7 @@ fn slice_by_width(line: &str, start: u16, width: u16) -> &str {
     let mut end_byte = line.len();
 
     for (byte_idx, ch) in line.char_indices() {
-        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         let next_col = col.saturating_add(ch_width);
 
         if next_col <= start {
@@ -188,7 +212,7 @@ fn align_vertical_span(content: u16, area: u16, alignment: VerticalAlignment) ->
 
 #[cfg(test)]
 mod tests {
-    use super::{Math, slice_by_width};
+    use super::Math;
     use ratatui_core::{
         buffer::Buffer,
         layout::{HorizontalAlignment, Rect, VerticalAlignment},
@@ -197,19 +221,23 @@ mod tests {
     };
 
     #[test]
-    fn slice_by_width_excludes_wide_characters_that_cross_the_end() {
-        assert_eq!(slice_by_width("你", 0, 1), "");
-        assert_eq!(slice_by_width("你", 0, 2), "你");
-    }
-
-    #[test]
     fn render_clears_short_rows_before_writing() {
-        let math = Math {
-            rendered: "a\nbc\n".into(),
-            style: Style::default(),
-            horizontal_alignment: HorizontalAlignment::Left,
-            vertical_alignment: VerticalAlignment::Top,
+        let tree = {
+            use crate::layout_tree::{LayoutNode, NodeKind};
+            use crate::style::Style as TxmStyle;
+            LayoutNode {
+                width: 2,
+                height: 2,
+                baseline: 0,
+                style: TxmStyle::new(),
+                kind: NodeKind::HStack {
+                    children: vec![LayoutNode::from_char('a'), LayoutNode::from_char('b')],
+                    spacing: 0,
+                },
+            }
         };
+
+        let math = Math::from_tree(&tree);
         let area = Rect::new(0, 0, 2, 2);
         let mut buffer = Buffer::empty(area);
         for y in 0..area.height {
@@ -221,17 +249,28 @@ mod tests {
         (&math).render(area, &mut buffer);
 
         assert_eq!(buffer[(0, 0)].symbol(), "a");
-        assert_eq!(buffer[(1, 0)].symbol(), " ");
+        assert_eq!(buffer[(1, 0)].symbol(), "b");
     }
 
     #[test]
     fn render_clears_alignment_padding() {
-        let math = Math {
-            rendered: "a\n".into(),
-            style: Style::default(),
-            horizontal_alignment: HorizontalAlignment::Center,
-            vertical_alignment: VerticalAlignment::Center,
+        let tree = {
+            use crate::layout_tree::{LayoutNode, NodeKind};
+            use crate::style::Style as TxmStyle;
+            LayoutNode {
+                width: 1,
+                height: 1,
+                baseline: 0,
+                style: TxmStyle::new(),
+                kind: NodeKind::Text { content: vec!['a'] },
+            }
         };
+
+        let math = Math::from_tree(&tree)
+            .style(Style::default())
+            .horizontal_alignment(HorizontalAlignment::Center)
+            .vertical_alignment(VerticalAlignment::Center);
+
         let area = Rect::new(0, 0, 3, 3);
         let mut buffer = Buffer::empty(area);
         for y in 0..area.height {

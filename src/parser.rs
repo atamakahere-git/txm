@@ -502,7 +502,6 @@ impl<'a> Parser<'a> {
             // string argumnets. Maybe we can add `requires_string_argument` or something like
             // that in Glyph trait?
 
-            #[cfg(feature = "fancy")]
             if name == "color" {
                 self.expect(Token::LBrace)?;
                 let color_name = self.parse_continuous_string(Token::RBrace)?;
