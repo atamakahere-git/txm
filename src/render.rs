@@ -10,7 +10,7 @@ pub fn render(
 ) -> Result<LayoutNode, ParseError> {
     match expr {
         Expr::Ident(s) | Expr::Number(s) => {
-            let mut node = LayoutNode::from_str(s);
+            let mut node = LayoutNode::text_str(s);
             node.style = ctx.current_style;
             Ok(node)
         }
@@ -39,7 +39,7 @@ pub fn render(
 
         Expr::Neg(inner) => {
             let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::neg(inner))
+            Ok(LayoutNode::negate(inner))
         }
 
         Expr::Command { name, opts, args } => {
@@ -55,7 +55,7 @@ pub fn render(
 
                 rendered_node
             } else {
-                let mut node = LayoutNode::from_str(name);
+                let mut node = LayoutNode::text_str(name);
                 node.style = ctx.current_style;
                 Ok(node)
             }
@@ -129,7 +129,7 @@ pub fn render(
                 ":" => LayoutNode::text(vec![':'; 2]),
                 ";" => LayoutNode::text(vec![';'; 3]),
                 "!" => LayoutNode::empty(),
-                _ => LayoutNode::from_str(s),
+                _ => LayoutNode::text_str(s),
             };
             node.style = ctx.current_style;
             Ok(node)
@@ -185,7 +185,7 @@ fn render_power(
         && let (Expr::Number(n), Expr::Number(d)) = (&args[0], &args[1])
     {
         let exp_str = format!("{n}/{d}");
-        let exp_node = LayoutNode::from_str(&exp_str);
+        let exp_node = LayoutNode::text_str(&exp_str);
         return Ok(LayoutNode::superscript(base, exp_node));
     }
 

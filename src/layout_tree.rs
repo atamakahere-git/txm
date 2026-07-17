@@ -145,7 +145,7 @@ impl LayoutNode {
         Self::text(vec![c])
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn text_str(s: &str) -> Self {
         Self::text(s.chars().collect())
     }
 
@@ -461,7 +461,7 @@ impl LayoutNode {
         }
     }
 
-    pub fn neg(inner: LayoutNode) -> Self {
+    pub fn negate(inner: LayoutNode) -> Self {
         let width = inner.width + 1;
         let height = inner.height;
         let baseline = inner.baseline;

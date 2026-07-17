@@ -88,9 +88,9 @@ pub(crate) fn render_node(node: &LayoutNode, buf: &mut impl RenderTarget, x: usi
             } else {
                 let resolved =
                     resolve_delimiters(*left, *right, inner.height, *fill, inner.baseline);
-                for row in 0..inner.height {
-                    buf.set(x, y + row, resolved[row].0, style);
-                    buf.set(x + node.width - 1, y + row, resolved[row].1, style);
+                for (row, (l, r)) in resolved.iter().enumerate().take(inner.height) {
+                    buf.set(x, y + row, *l, style);
+                    buf.set(x + node.width - 1, y + row, *r, style);
                 }
                 render_node(inner, buf, x + 2, y);
             }

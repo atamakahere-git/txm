@@ -1,7 +1,7 @@
-use crate::ParseError;
 use crate::ast::Expr;
 use crate::layout_tree::LayoutNode;
 use crate::style::Style;
+use crate::ParseError;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -84,7 +84,7 @@ impl Glyph for LimitGlyph {
         _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
     ) -> LayoutNode {
-        LayoutNode::from_str("lim")
+        LayoutNode::text_str("lim")
     }
 
     fn required_args(&self) -> usize {
@@ -120,7 +120,7 @@ impl Glyph for TextGlyph {
         _opts: &[LayoutNode],
         _ctx: &mut RenderCtx,
     ) -> LayoutNode {
-        LayoutNode::from_str(self.0)
+        LayoutNode::text_str(self.0)
     }
 }
 

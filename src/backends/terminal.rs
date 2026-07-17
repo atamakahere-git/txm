@@ -48,9 +48,10 @@ impl CharBuf {
             height,
         }
     }
+}
 
-    fn to_string(&self) -> String {
-        let mut s = String::new();
+impl fmt::Display for CharBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut prev_style = Style::new();
 
         for y in 0..self.height {
@@ -61,24 +62,24 @@ impl CharBuf {
 
                 if style != prev_style {
                     if !prev_style.is_empty() {
-                        s.push_str("\x1b[0m");
+                        write!(f, "\x1b[0m")?;
                     }
                     if !style.is_empty() {
-                        style.write_ansi_prefix(&mut s).unwrap();
+                        style.write_ansi_prefix(f).unwrap();
                     }
                     prev_style = style;
                 }
 
-                s.push(self.data[i]);
+                write!(f, "{}", self.data[i])?;
             }
-            s.push('\n');
+            writeln!(f)?;
         }
 
         if !prev_style.is_empty() {
-            s.push_str("\x1b[0m");
+            write!(f, "\x1b[0m")?;
         }
 
-        s
+        Ok(())
     }
 }
 

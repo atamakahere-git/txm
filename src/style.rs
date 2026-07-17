@@ -111,15 +111,15 @@ impl Style {
             first = false;
         }
         if self.is_italic() {
-            write!(f, "{}{}", if first { "" } else { ";" }, "3")?;
+            write!(f, "{}3", if first { "" } else { ";" })?;
             first = false;
         }
         if self.is_underline() {
-            write!(f, "{}{}", if first { "" } else { ";" }, "4")?;
+            write!(f, "{}4", if first { "" } else { ";" })?;
             first = false;
         }
         if self.is_dim() {
-            write!(f, "{}{}", if first { "" } else { ";" }, "2")?;
+            write!(f, "{}2", if first { "" } else { ";" })?;
             first = false;
         }
 
