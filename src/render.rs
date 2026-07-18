@@ -11,13 +11,20 @@ pub fn render(
     match expr {
         Expr::Ident(s) => {
             let mut node = LayoutNode::text(s.chars().collect());
-            node.style = ctx.current_style;
+
+            // un-italic if it is a delimiter
+            node.style = if matches!(s.as_str(), "(" | ")" | "[" | "]") {
+                ctx.current_style.un_italic()
+            } else {
+                ctx.current_style
+            };
+
             Ok(node)
         }
 
         Expr::Number(s) => {
             let mut node = LayoutNode::text_str(s);
-            node.style = ctx.current_style;
+            node.style = ctx.current_style.un_italic();
             Ok(node)
         }
 

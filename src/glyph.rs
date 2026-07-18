@@ -123,6 +123,7 @@ impl Glyph for BinomGlyph {
             args[0].clone(),
             args[1].clone(),
             crate::layout_tree::LineStyle::None,
+            ctx.current_style,
         );
 
         LayoutNode::stretchy_delim(inner, '(', ')', false, ctx.current_style.un_italic())
@@ -138,13 +139,12 @@ impl Glyph for FracGlyph {
     }
 
     fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
-        let mut node = LayoutNode::vstack(
+        LayoutNode::vstack(
             args[0].clone(),
             args[1].clone(),
             crate::layout_tree::LineStyle::Solid,
-        );
-        node.style = ctx.current_style;
-        node
+            ctx.current_style,
+        )
     }
 }
 

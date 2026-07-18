@@ -184,7 +184,7 @@ impl LayoutNode {
         }
     }
 
-    pub fn vstack(top: LayoutNode, bottom: LayoutNode, line: LineStyle) -> Self {
+    pub fn vstack(top: LayoutNode, bottom: LayoutNode, line: LineStyle, style: Style) -> Self {
         let inner_w = top.width.max(bottom.width);
         let pad = 1;
         let max_h = top.height.max(bottom.height);
@@ -196,7 +196,7 @@ impl LayoutNode {
             width: w,
             height: h,
             baseline,
-            style: Style::new(),
+            style,
             kind: NodeKind::VStack {
                 top: Box::new(top),
                 bottom: Box::new(bottom),
