@@ -392,7 +392,7 @@ impl Glyph for AccentGlyph {
 
     fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
         let mut node = LayoutNode::accent(args[0].clone(), self.mark, self.stretch);
-        node.style = ctx.current_style;
+        node.style = ctx.current_style.un_italic();
         node
     }
 }

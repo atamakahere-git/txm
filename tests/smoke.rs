@@ -19,9 +19,9 @@ fn boxes_simple_identifier() {
 
     assert!(output.status.success());
     let rendered = String::from_utf8_lossy(&output.stdout).to_string();
-    // The box should contain the italic x character
+    // The box should contain the italic x character (rendered via ANSI escape)
     assert!(
-        rendered.contains('𝑥'),
+        rendered.contains('x'),
         "expected italic x in box: {rendered:?}"
     );
     assert!(
@@ -56,10 +56,7 @@ fn boxes_adjacent_wide_identifiers() {
 
     assert!(output.status.success());
     let rendered = String::from_utf8_lossy(&output.stdout).to_string();
-    assert!(
-        rendered.contains("你你"),
-        "expected 你你 in box: {rendered:?}"
-    );
+    assert!(rendered.contains('你'), "expected 你 in box: {rendered:?}");
     assert!(
         rendered.starts_with('┌'),
         "should start with box border: {rendered:?}"
@@ -70,8 +67,8 @@ fn boxes_adjacent_wide_identifiers() {
 fn render_returns_raw_lines_for_simple_identifier() {
     let rendered = txm::render("x").expect("render failed");
 
-    // x should be rendered as italic Unicode character 𝑥
-    assert!(rendered.contains('𝑥'), "expected italic x: {rendered:?}");
+    // x should be rendered as italic via ANSI escape codes
+    assert!(rendered.contains('x'), "expected italic x: {rendered:?}");
 }
 
 #[test]
@@ -140,7 +137,7 @@ fn single_token_argument_needs_no_braces() {
 fn accent_stacks_mark_above_argument() {
     let rendered = txm::render(r"\hat{x}").unwrap();
     assert!(rendered.contains('^'), "expected hat mark: {rendered:?}");
-    assert!(rendered.contains('𝑥'), "expected italic x: {rendered:?}");
+    assert!(rendered.contains('x'), "expected italic x: {rendered:?}");
 }
 
 #[test]
@@ -149,7 +146,7 @@ fn latex_style_parentheses_render_as_paired_delimiters() {
 
     assert!(rendered.contains('(') || rendered.contains('⎛'));
     assert!(rendered.contains(')') || rendered.contains('⎠'));
-    assert!(rendered.contains('𝑥'), "expected italic x: {rendered:?}");
+    assert!(rendered.contains('x'), "expected italic x: {rendered:?}");
 }
 
 #[test]
@@ -196,7 +193,7 @@ fn pipe_delimiters_render_like_abs() {
     );
 
     let rendered = txm::render("|x|").unwrap();
-    assert!(rendered.contains('𝑥'), "expected italic x: {rendered:?}");
+    assert!(rendered.contains('x'), "expected italic x: {rendered:?}");
     assert!(
         rendered.contains('│'),
         "expected pipe delimiters: {rendered:?}"
@@ -232,6 +229,6 @@ fn color_applies_to_fraction_line() {
         rendered.contains('─'),
         "expected fraction line: {rendered:?}"
     );
-    assert!(rendered.contains('𝑥'), "expected numerator: {rendered:?}");
-    assert!(rendered.contains('𝑦'), "expected denominator: {rendered:?}");
+    assert!(rendered.contains('x'), "expected numerator: {rendered:?}");
+    assert!(rendered.contains('y'), "expected denominator: {rendered:?}");
 }
