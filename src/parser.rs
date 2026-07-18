@@ -139,6 +139,29 @@ impl<'a> Parser<'a> {
         self.parse_binop()
     }
 
+    pub fn parse(&mut self) -> Result<Expr, ParseError> {
+        let mut exprs = vec![self.parse_expr()?];
+        while matches!(
+            self.peek(),
+            Some(Token::RBrace) | Some(Token::RParen) | Some(Token::RBracket)
+        ) {
+            let s = match self.peek().unwrap() {
+                Token::RBrace => "}",
+                Token::RParen => ")",
+                Token::RBracket => "]",
+                _ => unreachable!(),
+            };
+            let s = s.to_string();
+            self.advance();
+            exprs.push(Expr::Ident(s));
+        }
+        if exprs.len() == 1 {
+            Ok(exprs.into_iter().next().unwrap())
+        } else {
+            Ok(Expr::Juxtapose(exprs))
+        }
+    }
+
     fn parse_binop(&mut self) -> Result<Expr, ParseError> {
         let mut lhs = self.parse_juxtapose()?;
         loop {
@@ -173,8 +196,11 @@ impl<'a> Parser<'a> {
         matches!(
             self.peek(),
             Some(Token::LBrace)
+                | Some(Token::RBrace)
                 | Some(Token::LParen)
+                | Some(Token::RParen)
                 | Some(Token::LBracket)
+                | Some(Token::RBracket)
                 | Some(Token::Number(_))
                 | Some(Token::Ident(_))
                 | Some(Token::Command(_))
@@ -316,21 +342,27 @@ impl<'a> Parser<'a> {
             }
             Some(Token::LBrace) => {
                 self.advance();
-                let inner = self.parse_expr()?;
-                self.expect(Token::RBrace)?;
-                Ok(Expr::Group(Box::new(inner)))
+                Ok(Expr::Ident("{".into()))
+            }
+            Some(Token::RBrace) => {
+                self.advance();
+                Ok(Expr::Ident("}".into()))
             }
             Some(Token::LParen) => {
                 self.advance();
-                let inner = self.parse_expr()?;
-                self.expect(Token::RParen)?;
-                Ok(Expr::Parens(Box::new(inner)))
+                Ok(Expr::Ident("(".into()))
+            }
+            Some(Token::RParen) => {
+                self.advance();
+                Ok(Expr::Ident(")".into()))
             }
             Some(Token::LBracket) => {
                 self.advance();
-                let inner = self.parse_expr()?;
-                self.expect(Token::RBracket)?;
-                Ok(Expr::Brackets(Box::new(inner)))
+                Ok(Expr::Ident("[".into()))
+            }
+            Some(Token::RBracket) => {
+                self.advance();
+                Ok(Expr::Ident("]".into()))
             }
             Some(Token::Command(name)) => {
                 let name = name.to_string();

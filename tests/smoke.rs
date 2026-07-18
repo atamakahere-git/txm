@@ -72,8 +72,11 @@ fn render_returns_raw_lines_for_simple_identifier() {
 }
 
 #[test]
-fn render_returns_error_for_unclosed_group() {
-    assert!(txm::render("{x").is_err());
+fn braces_render_as_literal_characters() {
+    let rendered = txm::render("{x}").unwrap();
+    assert!(rendered.contains('{'), "expected literal {{: {rendered:?}");
+    assert!(rendered.contains('x'), "expected x: {rendered:?}");
+    assert!(rendered.contains('}'), "expected literal }}: {rendered:?}");
 }
 
 #[test]

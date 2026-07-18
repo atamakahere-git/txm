@@ -21,35 +21,6 @@ pub fn render(
             Ok(node)
         }
 
-        Expr::Group(inner) => {
-            let prev_style = ctx.current_style;
-            let res = render(inner, reg, ctx);
-            ctx.current_style = prev_style;
-            res
-        }
-
-        Expr::Parens(inner) => {
-            let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::stretchy_delim(
-                inner,
-                '(',
-                ')',
-                false,
-                ctx.current_style.un_italic(),
-            ))
-        }
-
-        Expr::Brackets(inner) => {
-            let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::stretchy_delim(
-                inner,
-                '[',
-                ']',
-                false,
-                ctx.current_style.un_italic(),
-            ))
-        }
-
         Expr::Delimiter { left, right, inner } => {
             let inner = render(inner, reg, ctx)?;
             Ok(LayoutNode::stretchy_delim(
@@ -151,7 +122,7 @@ pub fn render(
         Expr::Escape(s) => {
             let mut node = match s.as_str() {
                 " " => LayoutNode::text(vec![' '; 4]),
-                "," => LayoutNode::text(vec![',']),
+                "," => LayoutNode::text(vec![' ']),
                 ":" => LayoutNode::text(vec![':'; 2]),
                 ";" => LayoutNode::text(vec![';'; 3]),
                 "!" => LayoutNode::empty(),

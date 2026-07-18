@@ -2,9 +2,6 @@
 pub enum Expr {
     Ident(String),
     Number(String),
-    Group(Box<Expr>),
-    Parens(Box<Expr>),
-    Brackets(Box<Expr>),
     Delimiter {
         left: char,
         right: char,

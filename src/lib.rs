@@ -32,7 +32,7 @@ pub fn layout(input: &str) -> Result<LayoutNode, ParseError> {
     let tokens = tokenize(input)?;
     let reg = registry();
     let mut parser = Parser::new(input, &tokens, reg);
-    let expr = parser.parse_expr()?;
+    let expr = parser.parse()?;
     let mut ctx = RenderCtx {
         depth: 0,
         current_style: Style::new().italic(),
