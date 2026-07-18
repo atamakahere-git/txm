@@ -442,6 +442,10 @@ impl Glyph for StyleModifierGlyph {
         1
     }
 
+    fn takes_string_arg(&self) -> bool {
+        true
+    }
+
     fn render_macro(
         &self,
         args: &[Expr],

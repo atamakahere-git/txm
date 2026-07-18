@@ -507,7 +507,6 @@ impl<'a> Parser<'a> {
     fn parse_command(&mut self, name: &str) -> Result<Expr, ParseError> {
         let glyph = self.registry.get(name);
         let has_opt = glyph.is_some_and(|g| g.has_optional());
-        #[allow(unused_mut)]
         let mut n_req = glyph.map_or(0, |g| g.required_args());
         let has_limits = glyph.is_some_and(|g| g.has_limits());
         let takes_str = glyph.is_some_and(|g| g.takes_string_arg());
