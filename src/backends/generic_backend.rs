@@ -33,17 +33,18 @@ fn render_inner(
         }
 
         NodeKind::VStack { top, bottom, line } => {
+            let max_h = top.height.max(bottom.height);
             let inner_w = top.width.max(bottom.width);
             let pad = 1;
             let top_x = x + pad + (inner_w.saturating_sub(top.width)) / 2;
             let bot_x = x + pad + (inner_w.saturating_sub(bottom.width)) / 2;
 
-            render_inner(top, buf, top_x, y, style);
-            render_inner(bottom, buf, bot_x, y + top.height + 1, style);
+            render_inner(top, buf, top_x, max_h - top.height + y, style);
+            render_inner(bottom, buf, bot_x, y + max_h + 1, style);
 
             if *line == LineStyle::Solid {
                 let w = node.width;
-                buf.fill_row(y + top.height, x, x + w, '─', style);
+                buf.fill_row(y + max_h, x, x + w, '─', style);
             }
         }
 

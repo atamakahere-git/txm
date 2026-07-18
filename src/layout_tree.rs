@@ -187,9 +187,10 @@ impl LayoutNode {
     pub fn vstack(top: LayoutNode, bottom: LayoutNode, line: LineStyle) -> Self {
         let inner_w = top.width.max(bottom.width);
         let pad = 1;
+        let max_h = top.height.max(bottom.height);
         let w = inner_w + 2 * pad;
-        let h = top.height + bottom.height + 1;
-        let baseline = top.height;
+        let h = max_h * 2 + 1;
+        let baseline = max_h;
 
         Self {
             width: w,
