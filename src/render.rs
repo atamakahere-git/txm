@@ -30,17 +30,35 @@ pub fn render(
 
         Expr::Parens(inner) => {
             let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::stretchy_delim(inner, '(', ')', false))
+            Ok(LayoutNode::stretchy_delim(
+                inner,
+                '(',
+                ')',
+                false,
+                ctx.current_style.un_italic(),
+            ))
         }
 
         Expr::Brackets(inner) => {
             let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::stretchy_delim(inner, '[', ']', false))
+            Ok(LayoutNode::stretchy_delim(
+                inner,
+                '[',
+                ']',
+                false,
+                ctx.current_style.un_italic(),
+            ))
         }
 
         Expr::Delimiter { left, right, inner } => {
             let inner = render(inner, reg, ctx)?;
-            Ok(LayoutNode::stretchy_delim(inner, *left, *right, false))
+            Ok(LayoutNode::stretchy_delim(
+                inner,
+                *left,
+                *right,
+                false,
+                ctx.current_style.un_italic(),
+            ))
         }
 
         Expr::Neg(inner) => {
@@ -93,7 +111,7 @@ pub fn render(
 
             let base = render(base, reg, ctx)?;
             let sub = render(sub, reg, ctx)?;
-            Ok(LayoutNode::subscript(base, sub))
+            Ok(LayoutNode::subscript(base, sub, ctx.current_style))
         }
 
         Expr::BothScripts(base, sub, sup) => {
@@ -110,10 +128,12 @@ pub fn render(
             let base_rendered = render(base, reg, ctx)?;
             let sub_rendered = render(sub, reg, ctx)?;
             let sup_rendered = render(sup, reg, ctx)?;
+
             Ok(LayoutNode::both_scripts(
                 base_rendered,
                 sub_rendered,
                 sup_rendered,
+                ctx.current_style,
             ))
         }
 
@@ -173,7 +193,7 @@ pub fn render(
                 rendered_rows.push(rendered_row);
             }
 
-            LayoutNode::matrix(name, &rendered_rows)
+            LayoutNode::matrix(name, &rendered_rows, ctx.current_style.un_italic())
         }
     }
 }
@@ -192,11 +212,15 @@ fn render_power(
     {
         let exp_str = format!("{n}/{d}");
         let exp_node = LayoutNode::text_str(&exp_str);
-        return Ok(LayoutNode::superscript(base, exp_node));
+        return Ok(LayoutNode::superscript(base, exp_node, ctx.current_style));
     }
 
     let rendered_exp = render(exp, reg, ctx)?;
-    Ok(LayoutNode::superscript(base, rendered_exp))
+    Ok(LayoutNode::superscript(
+        base,
+        rendered_exp,
+        ctx.current_style,
+    ))
 }
 
 #[cfg(test)]

@@ -52,31 +52,22 @@ impl CharBuf {
 
 impl fmt::Display for CharBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut prev_style = Style::new();
-
         for y in 0..self.height {
             let row_start = y * self.width;
             for x in 0..self.width {
                 let i = row_start + x;
                 let style = self.styles[i];
 
-                if style != prev_style {
-                    if !prev_style.is_empty() {
-                        write!(f, "\x1b[0m")?;
-                    }
-                    if !style.is_empty() {
-                        style.write_ansi_prefix(f).unwrap();
-                    }
-                    prev_style = style;
+                if !style.is_empty() {
+                    style.write_ansi_prefix(f)?;
+                    write!(f, "{}", self.data[i])?;
+                    write!(f, "\x1b[0m")?;
+                } else {
+                    write!(f, "{}", self.data[i])?;
                 }
-
-                write!(f, "{}", self.data[i])?;
             }
-            writeln!(f)?;
-        }
 
-        if !prev_style.is_empty() {
-            write!(f, "\x1b[0m")?;
+            writeln!(f)?;
         }
 
         Ok(())

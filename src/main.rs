@@ -151,6 +151,7 @@ fn strip_ansi(s: &str) -> String {
             result.push(c);
         }
     }
+
     result
 }
 
@@ -165,15 +166,15 @@ fn boxed(rendered: &str, f: &mut impl std::io::Write) {
 
     let border = "─".repeat(width + 2);
 
-    let _ = writeln!(f, "┌{border}┐");
-    let _ = writeln!(f, "│ {:width$} │", "", width = width);
+    _ = writeln!(f, "┌{border}┐");
+    _ = writeln!(f, "│ {:width$} │", "", width = width);
 
     for line in lines {
         let visible = strip_ansi(line);
         let padding = width - visible.width();
-        let _ = writeln!(f, "│ {line}{:padding$} │", "", padding = padding);
+        _ = writeln!(f, "│ {line}{:padding$} │", "", padding = padding);
     }
 
-    let _ = writeln!(f, "│ {:width$} │", "", width = width);
-    let _ = writeln!(f, "└{border}┘");
+    _ = writeln!(f, "│ {:width$} │", "", width = width);
+    _ = writeln!(f, "└{border}┘");
 }

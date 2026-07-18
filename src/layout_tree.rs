@@ -225,7 +225,7 @@ impl LayoutNode {
         }
     }
 
-    pub fn superscript(base: LayoutNode, exp: LayoutNode) -> Self {
+    pub fn superscript(base: LayoutNode, exp: LayoutNode, style: Style) -> Self {
         if exp.height == 1
             && let converted = map_content(&exp.kind, to_superscript_char)
             && converted.len() == exp.width
@@ -234,7 +234,7 @@ impl LayoutNode {
                 width: base.width + exp.width,
                 height: base.height,
                 baseline: base.baseline,
-                style: Style::new(),
+                style,
                 kind: NodeKind::Superscript {
                     inline: true,
                     base: Box::new(base),
@@ -252,7 +252,7 @@ impl LayoutNode {
             width,
             height,
             baseline,
-            style: Style::new(),
+            style,
             kind: NodeKind::Superscript {
                 inline,
                 base: Box::new(base),
@@ -261,7 +261,7 @@ impl LayoutNode {
         }
     }
 
-    pub fn subscript(base: LayoutNode, sub: LayoutNode) -> Self {
+    pub fn subscript(base: LayoutNode, sub: LayoutNode, style: Style) -> Self {
         if sub.height == 1
             && let converted = map_content(&sub.kind, to_subscript_char)
             && converted.len() == sub.width
@@ -270,11 +270,11 @@ impl LayoutNode {
                 width: base.width + sub.width,
                 height: base.height,
                 baseline: base.baseline,
-                style: Style::new(),
+                style,
                 kind: NodeKind::Subscript {
                     inline: true,
                     base: Box::new(base),
-                    sub: Box::new(LayoutNode::text_with_style(converted, Style::new())),
+                    sub: Box::new(LayoutNode::text_with_style(converted, style)),
                 },
             };
         }
@@ -287,7 +287,7 @@ impl LayoutNode {
             width,
             height,
             baseline: base.baseline,
-            style: Style::new(),
+            style,
             kind: NodeKind::Subscript {
                 inline,
                 base: Box::new(base),
@@ -296,7 +296,12 @@ impl LayoutNode {
         }
     }
 
-    pub fn both_scripts(base: LayoutNode, sub: LayoutNode, sup: LayoutNode) -> LayoutNode {
+    pub fn both_scripts(
+        base: LayoutNode,
+        sub: LayoutNode,
+        sup: LayoutNode,
+        style: Style,
+    ) -> LayoutNode {
         let sup_h = sup.height;
         let height = sup_h + sub.height + base.height;
         let width = base.width + sub.width.max(sup.width);
@@ -306,7 +311,7 @@ impl LayoutNode {
             width,
             height,
             baseline,
-            style: Style::new(),
+            style,
             kind: NodeKind::BothScripts {
                 base: Box::new(base),
                 sub: Box::new(sub),
@@ -315,14 +320,20 @@ impl LayoutNode {
         }
     }
 
-    pub fn stretchy_delim(inner: LayoutNode, left: char, right: char, fill: bool) -> Self {
+    pub fn stretchy_delim(
+        inner: LayoutNode,
+        left: char,
+        right: char,
+        fill: bool,
+        style: Style,
+    ) -> Self {
         if inner.height <= 1 {
             let w = inner.width + 2;
             return Self {
                 width: w,
                 height: 1,
                 baseline: 0,
-                style: Style::new(),
+                style,
                 kind: NodeKind::StretchyDelim {
                     inner: Box::new(inner),
                     left,
@@ -339,7 +350,7 @@ impl LayoutNode {
             width: w,
             height: h,
             baseline: inner.baseline,
-            style: Style::new(),
+            style,
             kind: NodeKind::StretchyDelim {
                 inner: Box::new(inner),
                 left,
@@ -533,6 +544,7 @@ impl LayoutNode {
     pub fn matrix(
         name: &str,
         rows: &[Vec<LayoutNode>],
+        style: Style,
     ) -> Result<LayoutNode, crate::error::ParseError> {
         if rows.is_empty() || rows[0].is_empty() {
             return Ok(Self::empty());
@@ -598,7 +610,13 @@ impl LayoutNode {
             },
         };
 
-        Ok(Self::stretchy_delim(inner, left_delim, right_delim, true))
+        Ok(Self::stretchy_delim(
+            inner,
+            left_delim,
+            right_delim,
+            true,
+            style,
+        ))
     }
 }
 

@@ -126,9 +126,7 @@ impl Glyph for BinomGlyph {
             crate::layout_tree::LineStyle::None,
         );
 
-        let mut node = LayoutNode::stretchy_delim(inner, '(', ')', false);
-        node.style = ctx.current_style;
-        node
+        LayoutNode::stretchy_delim(inner, '(', ')', false, ctx.current_style.un_italic())
     }
 }
 
@@ -368,7 +366,14 @@ impl Glyph for AbsGlyph {
     }
 
     fn render(&self, args: &[LayoutNode], _opts: &[LayoutNode], ctx: &RenderCtx) -> LayoutNode {
-        let mut node = LayoutNode::stretchy_delim(args[0].clone(), '|', '|', false);
+        let mut node = LayoutNode::stretchy_delim(
+            args[0].clone(),
+            '|',
+            '|',
+            false,
+            ctx.current_style.un_italic(),
+        );
+
         node.style = ctx.current_style;
         node
     }
