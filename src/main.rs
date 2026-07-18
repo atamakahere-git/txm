@@ -37,10 +37,15 @@ fn main() {
         },
     ];
 
-    let program: String = env::args().next().unwrap_or_default();
+    let program =
+        std::fs::canonicalize(std::env::args().next().unwrap_or_default()).unwrap_or_default();
+    let program = program
+        .strip_prefix(std::env::current_dir().unwrap_or_default())
+        .unwrap_or(std::path::Path::new(""));
+    let program = program.to_str().unwrap_or_default();
 
     match parse_args() {
-        Ok(Cli::Help) => print!("{}", help(&program, &flags)),
+        Ok(Cli::Help) => print!("{}", help(program, &flags)),
         Ok(Cli::Version) => println!("txm {}", env!("CARGO_PKG_VERSION")),
         Ok(Cli::Run(config)) => match txm::render(&config.expression) {
             Ok(rendered) => {
@@ -55,7 +60,7 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Err(msg) if msg == "missing expression" => print!("{}", help(&program, &flags)),
+        Err(msg) if msg == "missing expression" => print!("{}", help(program, &flags)),
         Err(msg) => {
             eprintln!("error: {msg}");
             eprintln!("\nFor more information, try '--help'.");
