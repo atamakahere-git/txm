@@ -669,7 +669,7 @@ where
 
             NodeKind::HStack { children, spacing } => {
                 let n = children.len();
-                for (i, node) in children.into_iter().enumerate() {
+                for (i, node) in children.iter().enumerate() {
                     map_content_internal(&node.kind, f, vec);
                     if i + 1 != n {
                         vec.extend(std::iter::repeat_n(' ', *spacing));
