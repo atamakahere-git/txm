@@ -139,29 +139,6 @@ impl<'a> Parser<'a> {
         self.parse_binop()
     }
 
-    pub fn parse(&mut self) -> Result<Expr, ParseError> {
-        let mut exprs = vec![self.parse_expr()?];
-        while matches!(
-            self.peek(),
-            Some(Token::RBrace) | Some(Token::RParen) | Some(Token::RBracket)
-        ) {
-            let s = match self.peek().unwrap() {
-                Token::RBrace => "}",
-                Token::RParen => ")",
-                Token::RBracket => "]",
-                _ => unreachable!(),
-            };
-            let s = s.to_string();
-            self.advance();
-            exprs.push(Expr::Ident(s));
-        }
-        if exprs.len() == 1 {
-            Ok(exprs.into_iter().next().unwrap())
-        } else {
-            Ok(Expr::Juxtapose(exprs))
-        }
-    }
-
     fn parse_binop(&mut self) -> Result<Expr, ParseError> {
         let mut lhs = self.parse_juxtapose()?;
         loop {
@@ -196,7 +173,6 @@ impl<'a> Parser<'a> {
         matches!(
             self.peek(),
             Some(Token::LBrace)
-                | Some(Token::RBrace)
                 | Some(Token::LParen)
                 | Some(Token::RParen)
                 | Some(Token::LBracket)
@@ -230,7 +206,9 @@ impl<'a> Parser<'a> {
 
         while let Some(Token::LBrace)
         | Some(Token::LParen)
+        | Some(Token::RParen)
         | Some(Token::LBracket)
+        | Some(Token::RBracket)
         | Some(Token::Number(_))
         | Some(Token::Ident(_))
         | Some(Token::Command(_))
@@ -342,11 +320,9 @@ impl<'a> Parser<'a> {
             }
             Some(Token::LBrace) => {
                 self.advance();
-                Ok(Expr::Ident("{".into()))
-            }
-            Some(Token::RBrace) => {
-                self.advance();
-                Ok(Expr::Ident("}".into()))
+                let inner = self.parse_expr()?;
+                self.expect(Token::RBrace)?;
+                Ok(inner)
             }
             Some(Token::LParen) => {
                 self.advance();
@@ -536,6 +512,50 @@ impl<'a> Parser<'a> {
         Ok(delim)
     }
 
+    fn parse_delimited_arg(&mut self, close: Token) -> Result<Expr, ParseError> {
+        self.advance();
+        let inner_start = self.pos;
+        let mut depth = 1usize;
+        let mut match_idx = None;
+        for (idx, (token, _)) in self.tokens[inner_start..].iter().enumerate() {
+            if Self::is_opener_for(token, &close) {
+                depth += 1;
+            } else if Self::token_eq(token, &close) {
+                if depth == 1 {
+                    match_idx = Some(inner_start + idx);
+                    break;
+                }
+                depth -= 1;
+            }
+        }
+        match match_idx {
+            Some(idx) => {
+                let arg_tokens = &self.tokens[inner_start..idx];
+                self.pos = idx + 1;
+                self.parse_tokens(arg_tokens)
+            }
+            None => Err(ParseError::UnclosedLeftRight),
+        }
+    }
+
+    fn is_opener_for(token: &Token, close: &Token) -> bool {
+        matches!(
+            (token, close),
+            (Token::LBrace, Token::RBrace)
+                | (Token::LParen, Token::RParen)
+                | (Token::LBracket, Token::RBracket)
+        )
+    }
+
+    fn token_eq(a: &Token, b: &Token) -> bool {
+        matches!(
+            (a, b),
+            (Token::RBrace, Token::RBrace)
+                | (Token::RParen, Token::RParen)
+                | (Token::RBracket, Token::RBracket)
+        )
+    }
+
     fn parse_command(&mut self, name: &str) -> Result<Expr, ParseError> {
         let glyph = self.registry.get(name);
         let has_opt = glyph.is_some_and(|g| g.has_optional());
@@ -546,9 +566,7 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
 
         if has_opt && self.peek() == Some(&Token::LBracket) {
-            self.advance();
-            let opt = self.parse_expr()?;
-            self.expect(Token::RBracket)?;
+            let opt = self.parse_delimited_arg(Token::RBracket)?;
             opts.push(opt);
         }
 
@@ -560,17 +578,13 @@ impl<'a> Parser<'a> {
             }
 
             for _ in 0..n_req {
-                // A macro argument is either a braced group `{...}` or, following
-                // LaTeX, the single following atom (so `\mathbf x` and `\frac12`
-                // work, not only `\mathbf{x}` and `\frac{1}{2}`).
-                if self.peek() == Some(&Token::LBrace) {
-                    self.advance();
-                    let arg = self.parse_expr()?;
-                    self.expect(Token::RBrace)?;
-                    args.push(arg);
-                } else {
-                    args.push(self.parse_atom()?);
-                }
+                let arg = match self.peek() {
+                    Some(Token::LBrace) => self.parse_delimited_arg(Token::RBrace)?,
+                    Some(Token::LParen) => self.parse_delimited_arg(Token::RParen)?,
+                    Some(Token::LBracket) => self.parse_delimited_arg(Token::RBracket)?,
+                    _ => self.parse_atom()?,
+                };
+                args.push(arg);
             }
         }
 

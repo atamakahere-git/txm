@@ -72,11 +72,13 @@ fn render_returns_raw_lines_for_simple_identifier() {
 }
 
 #[test]
-fn braces_render_as_literal_characters() {
+fn braces_group_invisibly() {
     let rendered = txm::render("{x}").unwrap();
-    assert!(rendered.contains('{'), "expected literal {{: {rendered:?}");
     assert!(rendered.contains('x'), "expected x: {rendered:?}");
-    assert!(rendered.contains('}'), "expected literal }}: {rendered:?}");
+    assert!(
+        !rendered.contains('{'),
+        "should not contain literal {{: {rendered:?}"
+    );
 }
 
 #[test]
