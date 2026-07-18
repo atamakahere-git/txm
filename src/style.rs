@@ -228,6 +228,10 @@ pub fn parse_color(s: &str) -> Result<Color, ParseError> {
         "white" => Color::White,
         "black" => Color::Black,
 
-        _ => return Err(ParseError(format!("invalid color name: {s}"))),
+        _ => {
+            return Err(ParseError::InvalidColor {
+                name: s.to_string(),
+            });
+        }
     })
 }

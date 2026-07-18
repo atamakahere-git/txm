@@ -1,5 +1,3 @@
-use std::string::ParseError;
-
 use crate::ast::BinOp;
 use crate::style::Style;
 
@@ -583,9 +581,9 @@ impl LayoutNode {
             "bmatrix" => ('[', ']'),
             "pmatrix" => ('(', ')'),
             _ => {
-                return Err(crate::error::ParseError(format!(
-                    "unknown matrix environment: {name}"
-                )));
+                return Err(crate::error::ParseError::UnknownEnvironment {
+                    name: name.to_string(),
+                });
             }
         };
 

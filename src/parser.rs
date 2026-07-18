@@ -43,16 +43,19 @@ impl<'a> Parser<'a> {
 
     fn expect(&mut self, tok: Token) -> Result<(), ParseError> {
         match self.peek() {
-            None => Err(ParseError::at_eof(&format!("expected {tok:?}"), self.input)),
+            None => Err(ParseError::ExpectedToken {
+                expected: format!("{tok:?}"),
+            }
+            .at_eof(self.input)),
             Some(actual) if *actual == tok => {
                 self.advance();
                 Ok(())
             }
-            Some(actual) => Err(ParseError::at(
-                &format!("expected {tok:?}, got {actual:?}"),
-                self.current_span().unwrap().clone(),
-                self.input,
-            )),
+            Some(actual) => Err(ParseError::ExpectedTokenGot {
+                expected: format!("{tok:?}"),
+                got: format!("{actual:?}"),
+            }
+            .at(self.current_span().unwrap().clone(), self.input)),
         }
     }
 
@@ -70,18 +73,12 @@ impl<'a> Parser<'a> {
 
         loop {
             if let Some(Token::Ident(segment)) = self.peek() {
-                let span = self
-                    .current_span()
-                    .ok_or_else(|| ParseError("unexpected end of input".to_owned()))?;
+                let span = self.current_span().ok_or(ParseError::UnexpectedEof)?;
 
                 if let Some(prev_end) = last_end
                     && prev_end != span.start
                 {
-                    return Err(ParseError::at(
-                        "unexpected whitespace",
-                        span.clone(),
-                        self.input,
-                    ));
+                    return Err(ParseError::UnexpectedWhitespace.at(span.clone(), self.input));
                 }
 
                 name.push_str(segment);
@@ -90,10 +87,9 @@ impl<'a> Parser<'a> {
             } else if self.peek() == Some(&deliminted_by) {
                 break;
             } else {
-                return Err(ParseError::at(
-                    "expected a string",
+                return Err(ParseError::ExpectedString.at(
                     self.current_span()
-                        .ok_or_else(|| ParseError("unexpected eof".to_owned()))?
+                        .ok_or(ParseError::UnexpectedEof)?
                         .clone(),
                     self.input,
                 ));
@@ -111,9 +107,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.peek() {
                 Some(Token::Ident(segment)) | Some(Token::Number(segment)) => {
-                    let span = self
-                        .current_span()
-                        .ok_or_else(|| ParseError("unexpected end of input".to_owned()))?;
+                    let span = self.current_span().ok_or(ParseError::UnexpectedEof)?;
 
                     if let Some(prev_end) = last_end
                         && prev_end != span.start
@@ -127,10 +121,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::RBrace) => break,
                 _ => {
-                    return Err(ParseError::at(
-                        "expected a string",
+                    return Err(ParseError::ExpectedString.at(
                         self.current_span()
-                            .ok_or_else(|| ParseError("unexpected eof".to_owned()))?
+                            .ok_or(ParseError::UnexpectedEof)?
                             .clone(),
                         self.input,
                     ));
@@ -278,8 +271,8 @@ impl<'a> Parser<'a> {
         {
             // move
             let Expr::Command { name, mut args, .. } = base else {
-                return Err(ParseError(
-                    "internal parser error: limits argument base was not a command".into(),
+                return Err(ParseError::Internal(
+                    "limits argument base was not a command".into(),
                 ));
             };
 
@@ -347,9 +340,7 @@ impl<'a> Parser<'a> {
                 } else if name == "left" {
                     self.parse_left_delimited()
                 } else if name == "right" {
-                    Err(ParseError(
-                        "unexpected \\right without matching \\left".into(),
-                    ))
+                    Err(ParseError::UnexpectedRightWithoutLeft)
                 } else {
                     self.parse_command(&name)
                 }
@@ -422,11 +413,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expr::Ident(">".into()))
             }
-            other => Err(ParseError(format!(
-                "Unexpected token at position {}: {:?}",
-                self.pos,
-                other.cloned()
-            ))),
+            other => Err(ParseError::UnexpectedToken {
+                position: self.pos,
+                token: format!("{other:?}"),
+            }),
         }
     }
 
@@ -451,22 +441,18 @@ impl<'a> Parser<'a> {
         }
 
         let Some(match_idx) = match_idx else {
-            return Err(ParseError("unclosed \\left ... \\right pair".into()));
+            return Err(ParseError::UnclosedLeftRight);
         };
 
         let Some((Token::Command(name), _)) = self.tokens.get(match_idx) else {
-            return Err(ParseError(
-                "internal parser error: missing \\right command".into(),
-            ));
+            return Err(ParseError::Internal("missing \\right command".into()));
         };
         if *name != "right" {
-            return Err(ParseError(
-                "internal parser error: mismatched delimiter scan".into(),
-            ));
+            return Err(ParseError::Internal("mismatched delimiter scan".into()));
         }
 
         let Some((right_token, _)) = self.tokens.get(match_idx + 1) else {
-            return Err(ParseError("expected a delimiter after \\right".into()));
+            return Err(ParseError::ExpectedDelimiter { side: "right" });
         };
         let right = match right_token {
             Token::LParen | Token::Escape("(") => '(',
@@ -477,7 +463,7 @@ impl<'a> Parser<'a> {
             Token::RBrace | Token::Escape("}") => '}',
             Token::Pipe | Token::Escape("|") => '|',
             _ => {
-                return Err(ParseError("expected a delimiter after \\right".into()));
+                return Err(ParseError::ExpectedDelimiter { side: "right" });
             }
         };
         let expected_right = match left {
@@ -488,9 +474,7 @@ impl<'a> Parser<'a> {
             _ => unreachable!("unsupported left delimiter"),
         };
         if right != expected_right {
-            return Err(ParseError(format!(
-                "mismatched delimiters: \\left{left} and \\right{right}"
-            )));
+            return Err(ParseError::MismatchedDelimiters { left, right });
         }
 
         let inner = self.parse_tokens(&self.tokens[inner_start..match_idx])?;
@@ -502,7 +486,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn read_delimiter(&mut self, side: &str) -> Result<char, ParseError> {
+    fn read_delimiter(&mut self, side: &'static str) -> Result<char, ParseError> {
         let delim = match self.peek() {
             Some(Token::LParen) | Some(Token::Escape("(")) => '(',
             Some(Token::LBracket) | Some(Token::Escape("[")) => '[',
@@ -512,7 +496,7 @@ impl<'a> Parser<'a> {
             Some(Token::RBracket) | Some(Token::Escape("]")) => ']',
             Some(Token::RBrace) | Some(Token::Escape("}")) => '}',
             _ => {
-                return Err(ParseError(format!("expected a delimiter after \\{side}")));
+                return Err(ParseError::ExpectedDelimiter { side });
             }
         };
 
@@ -573,16 +557,14 @@ impl<'a> Parser<'a> {
         self.expect(Token::RBrace)?;
 
         if !matches!(env_name.as_str(), "matrix" | "bmatrix" | "pmatrix") {
-            return Err(ParseError(format!(
-                "unknown matrix environment: {env_name}"
-            )));
+            return Err(ParseError::UnknownEnvironment { name: env_name });
         }
 
         let body_start = self.pos;
         let mut depth = 0u32;
         let end_pos = loop {
             match self.tokens.get(self.pos) {
-                None => return Err(ParseError(format!("unclosed \\begin{{{}}}", env_name))),
+                None => return Err(ParseError::UnclosedEnvironment { name: env_name }),
                 Some((Token::Command(name), _)) if *name == "begin" => {
                     depth += 1;
                     self.pos += 1;
@@ -608,9 +590,10 @@ impl<'a> Parser<'a> {
 
         let end_name = self.parse_continuous_string(Token::RBrace)?;
         if *end_name != env_name {
-            return Err(ParseError(format!(
-                "mismatched \\begin{{{env_name}}} and \\end{{{end_name}}}",
-            )));
+            return Err(ParseError::MismatchedEnvironment {
+                begin: env_name,
+                end: end_name,
+            });
         }
 
         self.expect(Token::RBrace)?;

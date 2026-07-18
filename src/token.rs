@@ -78,7 +78,7 @@ pub fn tokenize(input: &str) -> Result<Vec<SpannedToken<'_>>, ParseError> {
         .spanned()
         .map(|(i, span)| {
             i.map(|i| (i, span.clone()))
-                .map_err(|_| ParseError::from_range(span))
+                .map_err(|_| ParseError::InvalidToken { byte: span.start })
         })
         .collect()
 }

@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::error::ParseError;
-use crate::glyph::{RenderCtx, SymbolRegistry, to_italic};
+use crate::glyph::{RenderCtx, SymbolRegistry};
 use crate::layout_tree::LayoutNode;
 
 pub fn render(
@@ -161,7 +161,7 @@ pub fn render(
             let num_cols = rows[0].len();
             for row in rows {
                 if row.len() != num_cols {
-                    return Err(ParseError("matrix rows have different lengths".into()));
+                    return Err(ParseError::MismatchedMatrixRows);
                 }
 
                 let mut rendered_row: Vec<LayoutNode> = Vec::new();

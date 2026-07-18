@@ -414,7 +414,7 @@ impl Glyph for TextColorGlyph {
         let color_str = if let Expr::Ident(c) = &args[0] {
             c.as_str()
         } else {
-            return Err(ParseError("expected a color name".into()));
+            return Err(ParseError::ExpectedColorName);
         };
 
         let prev_style = ctx.current_style;
@@ -517,7 +517,7 @@ impl Glyph for BgColorGlyph {
         let color_str = if let Expr::Ident(c) = &args[0] {
             c.as_str()
         } else {
-            return Err(ParseError("expected a color name".into()));
+            return Err(ParseError::ExpectedColorName);
         };
 
         let prev = ctx.current_style;
