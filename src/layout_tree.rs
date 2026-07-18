@@ -415,16 +415,16 @@ impl LayoutNode {
     pub fn summation(inner: Option<LayoutNode>) -> Self {
         match &inner {
             None => Self {
-                width: 4,
+                width: 5,
                 height: 3,
                 baseline: 1,
                 style: Style::new(),
                 kind: NodeKind::Summation { inner: None },
             },
             Some(inner) if inner.height <= 2 => {
-                let w = inner.width + 4;
+                let width = inner.width + 5; // 4 sigma + 1 space
                 Self {
-                    width: w,
+                    width,
                     height: 3,
                     baseline: 1,
                     style: Style::new(),
@@ -460,12 +460,21 @@ impl LayoutNode {
                 kind: NodeKind::Product { inner: None },
             },
             Some(inner) => {
-                let w = inner.width + 4;
-                let h = inner.height.max(1) + 1;
+                let height = inner.height.max(3);
+                let w_pi = if height <= 2 {
+                    3
+                } else {
+                    (height / 2 + 2).max(3)
+                };
+
+                let width = w_pi + 1 + inner.width;
+                let height_diff = height.saturating_sub(inner.height);
+                let baseline = inner.baseline + (height_diff / 2);
+
                 Self {
-                    width: w,
-                    height: h,
-                    baseline: inner.baseline + 1,
+                    width,
+                    height,
+                    baseline,
                     style: Style::new(),
                     kind: NodeKind::Product {
                         inner: Some(Box::new(inner.clone())),

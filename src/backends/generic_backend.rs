@@ -231,25 +231,31 @@ fn render_summation(
         None => {
             buf.set(x, y, '━', style);
             buf.set(x + 1, y, '━', style);
-            buf.set(x + 2, y, '┓', style);
-            buf.set(x, y + 1, '❯', style);
+            buf.set(x + 2, y, '━', style);
+            buf.set(x + 3, y, '┓', style);
+            buf.set(x, y + 1, '⟩', style);
             buf.set(x, y + 2, '━', style);
             buf.set(x + 1, y + 2, '━', style);
-            buf.set(x + 2, y + 2, '┛', style);
+            buf.set(x + 2, y + 2, '━', style);
+            buf.set(x + 3, y + 2, '┛', style);
+
             return;
         }
     };
 
     if inner.height <= 2 {
         let w_sigma = 4;
-        buf.fill_row(y, x, x + w_sigma - 1, '━', style);
-        buf.set(x + w_sigma - 1, y, '┓', style);
-        buf.set(x + w_sigma, y + 1, '⟩', style);
-        buf.fill_row(y + 2, x, x + w_sigma - 1, '━', style);
-        buf.set(x + w_sigma - 1, y + 2, '┛', style);
-
-        let inner_y = if inner.height == 1 { y + 1 } else { y };
-        render_inner(inner, buf, x + w_sigma, inner_y, style);
+        buf.set(x, y, '━', style);
+        buf.set(x + 1, y, '━', style);
+        buf.set(x + 2, y, '━', style);
+        buf.set(x + 3, y, '┓', style);
+        buf.set(x, y + 1, '⟩', style);
+        buf.set(x, y + 2, '━', style);
+        buf.set(x + 1, y + 2, '━', style);
+        buf.set(x + 2, y + 2, '━', style);
+        buf.set(x + 3, y + 2, '┛', style);
+        let inner_y = y + (h.saturating_sub(inner.height)) / 2;
+        render_inner(inner, buf, x + w_sigma + 1, inner_y, style);
         return;
     }
 
@@ -263,9 +269,9 @@ fn render_summation(
 
     for r in 1..h - 1 {
         let d = r.min(h - 1 - r);
-        let col = d - 1;
+        let col = d.saturating_sub(1);
 
-        let ch = if !h.is_multiple_of(2) && r == h / 2 {
+        let ch = if !h.is_power_of_two() && r == h / 2 {
             '⟩'
         } else if r < h / 2 {
             '╲'
@@ -299,16 +305,21 @@ fn render_product(
         }
     };
 
+    let w_pi = if h <= 2 { 3 } else { (h / 2 + 2).max(3) };
+
     buf.set(x, y, '┳', style);
-    buf.set(x + 1, y, '━', style);
-    buf.set(x + 2, y, '┳', style);
+    if w_pi > 2 {
+        buf.fill_row(y, x + 1, x + w_pi - 1, '━', style);
+    }
+    buf.set(x + w_pi - 1, y, '┳', style);
 
     for row in 1..h {
         buf.set(x, y + row, '┃', style);
-        buf.set(x + 2, y + row, '┃', style);
+        buf.set(x + w_pi - 1, y + row, '┃', style);
     }
 
-    render_inner(inner, buf, x + 4, y + 1, style);
+    let inner_y = y + (h.saturating_sub(inner.height)) / 2;
+    render_inner(inner, buf, x + w_pi + 1, inner_y, style);
 }
 
 fn render_integral(
