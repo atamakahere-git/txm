@@ -4,45 +4,68 @@ use ratatui_core::{
     style::Style,
     widgets::Widget,
 };
-use unicode_width::UnicodeWidthStr;
+use unicode_width::UnicodeWidthChar;
 
-use crate::backends::memory::{Backend as _, MemBuf, MemoryBackend};
+use crate::backends::generic_backend::render_node;
+use crate::backends::terminal::CharBuf;
 use crate::layout_tree::LayoutNode;
 
 #[derive(Debug, Clone)]
 pub struct Math {
-    mem: MemBuf,
+    mem: CharBuf,
     style: Style,
     horizontal_alignment: HorizontalAlignment,
     vertical_alignment: VerticalAlignment,
+    display_width: u16,
+}
+
+fn compute_display_width(mem: &CharBuf) -> u16 {
+    mem.data
+        .chunks_exact(mem.width)
+        .take(mem.height)
+        .map(|row| {
+            row.iter()
+                .map(|&ch| UnicodeWidthChar::width(ch).unwrap_or(0) as u16)
+                .sum()
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 impl Math {
     pub fn new(input: &str) -> Result<Self, crate::ParseError> {
         let tree = crate::layout(input)?;
-        let backend = MemoryBackend::new();
-        let mem = backend.render(&tree).unwrap();
+        let mut mem = CharBuf::new(tree.width, tree.height);
+        render_node(&tree, &mut mem, 0, 0);
+
+        let display_width = compute_display_width(&mem);
+
         Ok(Self {
             mem,
             style: Style::default(),
             horizontal_alignment: HorizontalAlignment::Left,
             vertical_alignment: VerticalAlignment::Top,
+            display_width,
         })
     }
 
     pub fn from_tree(tree: &LayoutNode) -> Self {
-        let backend = MemoryBackend::new();
-        let mem = backend.render(tree).unwrap();
+        let mut mem = CharBuf::new(tree.width, tree.height);
+        render_node(tree, &mut mem, 0, 0);
+
+        let display_width = compute_display_width(&mem);
+
         Self {
             mem,
             style: Style::default(),
             horizontal_alignment: HorizontalAlignment::Left,
             vertical_alignment: VerticalAlignment::Top,
+            display_width,
         }
     }
 
     pub fn size(&self) -> Size {
-        Rect::new(0, 0, self.mem.width as u16, self.mem.height as u16).as_size()
+        Rect::new(0, 0, self.display_width, self.mem.height as u16).as_size()
     }
 
     pub fn style(mut self, style: Style) -> Self {
@@ -67,7 +90,7 @@ impl Widget for &Math {
             return;
         }
 
-        let render_width = self.mem.width as u16;
+        let render_width = self.display_width;
         let render_height = self.mem.height as u16;
         if render_width == 0 || render_height == 0 {
             return;
@@ -79,26 +102,42 @@ impl Widget for &Math {
             }
         }
 
-        let (content_x, draw_x, visible_width) =
+        let (content_x, draw_x) =
             align_horizontal_span(render_width, area.width, self.horizontal_alignment);
         let (content_y, draw_y, visible_height) =
             align_vertical_span(render_height, area.height, self.vertical_alignment);
 
-        for row in 0..visible_height as usize {
-            let src_y = content_y as usize + row;
-            if src_y >= self.mem.height {
-                break;
-            }
+        let visible_data_rows = self
+            .mem
+            .data
+            .chunks_exact(self.mem.width)
+            .skip(content_y as usize)
+            .take(visible_height as usize);
 
-            let target_row = draw_y as usize + row;
-            if target_row >= area.height as usize {
-                break;
-            }
+        let visible_style_rows = self
+            .mem
+            .styles
+            .chunks_exact(self.mem.width)
+            .skip(content_y as usize)
+            .take(visible_height as usize);
 
+        let target_rows = draw_y as usize..draw_y as usize + visible_height as usize;
+
+        for ((data_row, style_row), target_row) in
+            visible_data_rows.zip(visible_style_rows).zip(target_rows)
+        {
             let mut col = 0u16;
-            let mut byte_start = 0usize;
+            let mut content_col = 0u16;
+            let mut cell_buf = [0u8; 4];
 
-            for (x_idx, cell) in self.mem.cells[src_y].iter().enumerate() {
+            for (&ch, &cell_style) in data_row.iter().zip(style_row.iter()) {
+                let cell_width = UnicodeWidthChar::width(ch).unwrap_or(0) as u16;
+                // Skip characters before content_x
+                if content_col < content_x {
+                    content_col += cell_width;
+                    continue;
+                }
+
                 let x = area.x.saturating_add(draw_x).saturating_add(col);
                 let y = area.y.saturating_add(target_row as u16);
 
@@ -106,63 +145,28 @@ impl Widget for &Math {
                     break;
                 }
 
-                let cell_str = cell.ch.to_string();
-                let cell_width = UnicodeWidthStr::width(cell_str.as_str()) as u16;
-
                 if x + cell_width > area.x + area.width {
                     break;
                 }
 
-                buf.set_stringn(x, y, &cell_str, cell_width as usize, self.style);
+                // Convert our style to ratatui's style
+                // TODO(perf-rataui): map underline/dim/fg_color/bg_color from txm::Style
+                let mut tui_style = ratatui_core::style::Style::default();
+                if cell_style.is_bold() {
+                    tui_style = tui_style.add_modifier(ratatui_core::style::Modifier::BOLD);
+                }
+                if cell_style.is_italic() {
+                    tui_style = tui_style.add_modifier(ratatui_core::style::Modifier::ITALIC);
+                }
+                tui_style = self.style.patch(tui_style);
+
+            let cell_str = ch.encode_utf8(&mut cell_buf);
+            buf.set_stringn(x, y, cell_str, cell_width as usize, tui_style);
+
                 col += cell_width;
+                content_col += cell_width;
             }
         }
-    }
-}
-
-fn slice_by_width(line: &str, start: u16, width: u16) -> &str {
-    if width == 0 {
-        return "";
-    }
-
-    let start = usize::from(start);
-    let end = start.saturating_add(usize::from(width));
-    let mut col = 0usize;
-    let mut start_byte = 0usize;
-    let mut end_byte = line.len();
-
-    for (byte_idx, ch) in line.char_indices() {
-        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        let next_col = col.saturating_add(ch_width);
-
-        if next_col <= start {
-            start_byte = byte_idx + ch.len_utf8();
-        } else if col < start {
-            start_byte = byte_idx + ch.len_utf8();
-        }
-
-        if col >= end {
-            end_byte = byte_idx;
-            break;
-        }
-
-        if next_col > end {
-            end_byte = byte_idx;
-            break;
-        }
-
-        if next_col == end {
-            end_byte = byte_idx + ch.len_utf8();
-            break;
-        }
-
-        col = next_col;
-    }
-
-    if start_byte >= end_byte {
-        ""
-    } else {
-        &line[start_byte.min(line.len())..end_byte.min(line.len())]
     }
 }
 
@@ -170,23 +174,21 @@ fn align_horizontal_span(
     content: u16,
     area: u16,
     alignment: HorizontalAlignment,
-) -> (u16, u16, u16) {
-    let visible = content.min(area);
-
+) -> (u16, u16) {
     if content <= area {
         let draw = match alignment {
             HorizontalAlignment::Left => 0,
             HorizontalAlignment::Center => (area - content) / 2,
             HorizontalAlignment::Right => area - content,
         };
-        (0, draw, visible)
+        (0, draw)
     } else {
         let content_start = match alignment {
             HorizontalAlignment::Left => 0,
             HorizontalAlignment::Center => (content - area) / 2,
             HorizontalAlignment::Right => content - area,
         };
-        (content_start, 0, visible)
+        (content_start, 0)
     }
 }
 
