@@ -482,9 +482,7 @@ mod tests {
             let uncolored: String = buf
                 .cells
                 .iter()
-                .filter(|(ch, style)| {
-                    *ch != ' ' && !matches!(Color::new(style.fg_color()), Color::RED)
-                })
+                .filter(|(ch, style)| *ch != ' ' && Color::new(style.fg_color()) != Color::RED)
                 .map(|(ch, _)| *ch)
                 .collect();
 

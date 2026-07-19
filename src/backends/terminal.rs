@@ -33,18 +33,19 @@ impl Backend for TerminalBackend {
     }
 }
 
-struct CharBuf {
-    data: Vec<char>,
-    styles: Vec<Style>,
-    width: usize,
-    height: usize,
+#[derive(Debug, Clone)]
+pub(crate) struct CharBuf {
+    pub data: Vec<char>,
+    pub styles: Vec<Style>,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl CharBuf {
-    fn new(width: usize, height: usize) -> Self {
+    pub fn new(width: usize, height: usize) -> Self {
         Self {
             data: vec![' '; width * height],
-            styles: vec![Style::new(); width * height],
+            styles: vec![Style::default(); width * height],
             width,
             height,
         }
