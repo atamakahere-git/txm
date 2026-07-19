@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::Write;
 
 use crate::backend::Backend;
 use crate::backend::RenderTarget;
@@ -52,19 +53,30 @@ impl CharBuf {
 
 impl fmt::Display for CharBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for y in 0..self.height {
-            let row_start = y * self.width;
-            for x in 0..self.width {
-                let i = row_start + x;
-                let style = self.styles[i];
+        let style_rows = self.styles.chunks_exact(self.width).take(self.height);
+        let data_rows = self.data.chunks_exact(self.width).take(self.height);
 
-                if !style.is_empty() {
-                    style.write_ansi_prefix(f)?;
-                    write!(f, "{}", self.data[i])?;
-                    write!(f, "\x1b[0m")?;
-                } else {
-                    write!(f, "{}", self.data[i])?;
+        for (style_row, data_row) in style_rows.zip(data_rows) {
+            let mut active_style: Option<&Style> = None;
+
+            for (style, &data) in style_row.iter().zip(data_row.iter()) {
+                if Some(style) != active_style {
+                    if active_style.is_some_and(|s| !s.is_empty()) {
+                        f.write_str("\x1b[0m")?;
+                    }
+
+                    if !style.is_empty() {
+                        style.write_ansi_prefix(f)?;
+                    }
+
+                    active_style = Some(style);
                 }
+
+                f.write_char(data)?;
+            }
+
+            if active_style.is_some_and(|s| !s.is_empty()) {
+                f.write_str("\x1b[0m")?;
             }
 
             writeln!(f)?;
